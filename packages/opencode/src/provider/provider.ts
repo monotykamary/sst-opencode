@@ -178,6 +178,24 @@ export namespace Provider {
     }
   })
 
+  export function invalidateState() {
+    log.info("invalidating provider state")
+    // Force re-initialization by clearing the cached state
+    try {
+      const { App } = require("../app/app")
+      const ctx = (App as any).ctx
+      if (ctx) {
+        const appInstance = ctx.use()
+        if (appInstance?.services?.has("provider")) {
+          log.info("clearing cached provider state")
+          appInstance.services.delete("provider")
+        }
+      }
+    } catch (error) {
+      log.warn("failed to invalidate provider state", { error })
+    }
+  }
+
   export async function list() {
     return state().then((state) => state.providers)
   }

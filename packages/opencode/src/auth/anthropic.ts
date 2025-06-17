@@ -76,6 +76,11 @@ export namespace AuthAnthropic {
       refresh: json.refresh_token as string,
       expires: Date.now() + json.expires_in * 1000,
     })
+    
+    // Invalidate provider state when token is refreshed
+    const { Provider } = await import("../provider/provider")
+    Provider.invalidateState()
+    
     return json.access_token as string
   }
 
