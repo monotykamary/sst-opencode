@@ -32,17 +32,19 @@ type EditorComponent interface {
 	Newline() (tea.Model, tea.Cmd)
 	Previous() (tea.Model, tea.Cmd)
 	Next() (tea.Model, tea.Cmd)
+	SetEscapeKeyInDebounce(inDebounce bool)
 }
 
 type editorComponent struct {
-	app            *app.App
-	width, height  int
-	textarea       textarea.Model
-	attachments    []app.Attachment
-	history        []string
-	historyIndex   int
-	currentMessage string
-	spinner        spinner.Model
+	app                *app.App
+	width, height      int
+	textarea           textarea.Model
+	attachments        []app.Attachment
+	history            []string
+	historyIndex       int
+	currentMessage     string
+	spinner            spinner.Model
+	escapeKeyInDebounce bool
 }
 
 func (m *editorComponent) Init() tea.Cmd {
@@ -117,7 +119,11 @@ func (m *editorComponent) Content() string {
 
 	hint := base("enter") + muted(" send   ")
 	if m.app.IsBusy() {
-		hint = muted("working") + m.spinner.View() + muted("  ") + base("esc") + muted(" interrupt")
+		if m.escapeKeyInDebounce {
+			hint = muted("working") + m.spinner.View() + muted("  ") + base("esc again") + muted(" interrupt")
+		} else {
+			hint = muted("working") + m.spinner.View() + muted("  ") + base("esc") + muted(" interrupt")
+		}
 	}
 
 	model := ""
@@ -263,6 +269,10 @@ func (m *editorComponent) Next() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *editorComponent) SetEscapeKeyInDebounce(inDebounce bool) {
+	m.escapeKeyInDebounce = inDebounce
+}
+
 func createTextArea(existing *textarea.Model) textarea.Model {
 	t := theme.CurrentTheme()
 	bgColor := t.BackgroundElement()
@@ -311,11 +321,12 @@ func NewEditorComponent(app *app.App) EditorComponent {
 	ta := createTextArea(nil)
 
 	return &editorComponent{
-		app:            app,
-		textarea:       ta,
-		history:        []string{},
-		historyIndex:   0,
-		currentMessage: "",
-		spinner:        s,
+		app:                app,
+		textarea:           ta,
+		history:            []string{},
+		historyIndex:       0,
+		currentMessage:     "",
+		spinner:            s,
+		escapeKeyInDebounce: false,
 	}
 }

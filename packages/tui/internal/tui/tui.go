@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/v2/key"
 	tea "github.com/charmbracelet/bubbletea/v2"
@@ -25,6 +26,19 @@ import (
 	"github.com/sst/opencode/pkg/client"
 )
 
+// EscapeDebounceTimeoutMsg is sent when the escape key debounce timeout expires
+type EscapeDebounceTimeoutMsg struct{}
+
+// EscapeKeyState tracks the state of escape key presses for debouncing
+type EscapeKeyState int
+
+const (
+	EscapeKeyIdle EscapeKeyState = iota
+	EscapeKeyFirstPress
+)
+
+const escapeDebounceTimeout = 1 * time.Second
+
 type appModel struct {
 	width, height        int
 	app                  *app.App
@@ -40,6 +54,7 @@ type appModel struct {
 	leaderBinding        *key.Binding
 	isLeaderSequence     bool
 	toastManager         *toast.ToastManager
+	escapeKeyState       EscapeKeyState
 }
 
 func (a appModel) Init() tea.Cmd {
@@ -171,9 +186,31 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 
-		// 6. Check again for commands that don't require leader
+		// 6. Handle escape key debounce for session interrupt
+		if keyString == "esc" && a.app.IsBusy() {
+			switch a.escapeKeyState {
+			case EscapeKeyIdle:
+				// First escape press - start debounce timer
+				a.escapeKeyState = EscapeKeyFirstPress
+				a.editor.SetEscapeKeyInDebounce(true)
+				return a, tea.Tick(escapeDebounceTimeout, func(t time.Time) tea.Msg {
+					return EscapeDebounceTimeoutMsg{}
+				})
+			case EscapeKeyFirstPress:
+				// Second escape press within timeout - actually interrupt
+				a.escapeKeyState = EscapeKeyIdle
+				a.editor.SetEscapeKeyInDebounce(false)
+				return a, util.CmdHandler(commands.ExecuteCommandMsg(a.app.Commands[commands.SessionInterruptCommand]))
+			}
+		}
+
+		// 7. Check again for commands that don't require leader (excluding escape when busy)
 		matches := a.app.Commands.Matches(msg, a.isLeaderSequence)
 		if len(matches) > 0 {
+			// Skip escape key interrupt if we're in debounce mode and app is busy
+			if keyString == "esc" && a.app.IsBusy() && a.escapeKeyState != EscapeKeyIdle {
+				return a, nil
+			}
 			return a, util.CmdHandler(commands.ExecuteCommandsMsg(matches))
 		}
 
@@ -283,6 +320,10 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		tm, cmd := a.toastManager.Update(msg)
 		a.toastManager = tm
 		cmds = append(cmds, cmd)
+	case EscapeDebounceTimeoutMsg:
+		// Reset escape key state after timeout
+		a.escapeKeyState = EscapeKeyIdle
+		a.editor.SetEscapeKeyInDebounce(false)
 	}
 
 	// update status bar
@@ -575,6 +616,7 @@ func NewModel(app *app.App) tea.Model {
 		showCompletionDialog: false,
 		editorContainer:      editorContainer,
 		toastManager:         toast.NewToastManager(),
+		escapeKeyState:       EscapeKeyIdle,
 		layout: layout.NewFlexLayout(
 			[]tea.ViewModel{messagesContainer, editorContainer},
 			layout.WithDirection(layout.FlexDirectionVertical),
