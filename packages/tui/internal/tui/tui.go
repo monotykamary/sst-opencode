@@ -189,8 +189,6 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 6. Handle interrupt key debounce for session interrupt
 		interruptCommand := a.app.Commands[commands.SessionInterruptCommand]
 		if interruptCommand.Matches(msg, a.isLeaderSequence) && a.app.IsBusy() {
-
-
 			switch a.interruptKeyState {
 			case InterruptKeyIdle:
 				// First interrupt key press - start debounce timer
