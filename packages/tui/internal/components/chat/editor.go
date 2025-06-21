@@ -32,7 +32,7 @@ type EditorComponent interface {
 	Newline() (tea.Model, tea.Cmd)
 	Previous() (tea.Model, tea.Cmd)
 	Next() (tea.Model, tea.Cmd)
-	SetEscapeKeyInDebounce(inDebounce bool)
+	SetInterruptKeyInDebounce(inDebounce bool)
 }
 
 type editorComponent struct {
@@ -44,7 +44,7 @@ type editorComponent struct {
 	historyIndex       int
 	currentMessage     string
 	spinner            spinner.Model
-	escapeKeyInDebounce bool
+	interruptKeyInDebounce bool
 }
 
 func (m *editorComponent) Init() tea.Cmd {
@@ -119,7 +119,7 @@ func (m *editorComponent) Content() string {
 
 	hint := base("enter") + muted(" send   ")
 	if m.app.IsBusy() {
-		if m.escapeKeyInDebounce {
+		if m.interruptKeyInDebounce {
 			hint = muted("working") + m.spinner.View() + muted("  ") + base("esc again") + muted(" interrupt")
 		} else {
 			hint = muted("working") + m.spinner.View() + muted("  ") + base("esc") + muted(" interrupt")
@@ -269,8 +269,8 @@ func (m *editorComponent) Next() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *editorComponent) SetEscapeKeyInDebounce(inDebounce bool) {
-	m.escapeKeyInDebounce = inDebounce
+func (m *editorComponent) SetInterruptKeyInDebounce(inDebounce bool) {
+	m.interruptKeyInDebounce = inDebounce
 }
 
 func createTextArea(existing *textarea.Model) textarea.Model {
@@ -327,6 +327,6 @@ func NewEditorComponent(app *app.App) EditorComponent {
 		historyIndex:       0,
 		currentMessage:     "",
 		spinner:            s,
-		escapeKeyInDebounce: false,
+		interruptKeyInDebounce: false,
 	}
 }
