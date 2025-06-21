@@ -59,6 +59,9 @@ export const BashTool = Tool.define({
     const stdout = await new Response(process.stdout).text()
     const stderr = await new Response(process.stderr).text()
 
+    // Combine stdout and stderr, with stderr appearing after stdout
+    const combinedOutput = stdout + (stderr ? stderr : "")
+    
     return {
       metadata: {
         stderr,
@@ -66,7 +69,7 @@ export const BashTool = Tool.define({
         description: params.description,
         title: params.command,
       },
-      output: stdout.replaceAll(/\x1b\[[0-9;]*m/g, ""),
+      output: combinedOutput.replaceAll(/\x1b\[[0-9;]*m/g, ""),
     }
   },
 })
