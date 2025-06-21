@@ -66,6 +66,7 @@ export const BashTool = Tool.define({
       metadata: {
         stderr,
         stdout,
+        exitCode: process.exitCode,
         description: params.description,
         title: params.command,
       },
