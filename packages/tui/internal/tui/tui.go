@@ -191,7 +191,7 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if interruptCommand.Matches(msg, a.isLeaderSequence) && a.app.IsBusy() {
 			// Get the configured key text for display
 			keyText := interruptCommand.Keys()[0]
-			
+
 			switch a.interruptKeyState {
 			case InterruptKeyIdle:
 				// First interrupt key press - start debounce timer

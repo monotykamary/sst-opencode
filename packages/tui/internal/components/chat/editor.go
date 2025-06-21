@@ -36,14 +36,14 @@ type EditorComponent interface {
 }
 
 type editorComponent struct {
-	app                *app.App
-	width, height      int
-	textarea           textarea.Model
-	attachments        []app.Attachment
-	history            []string
-	historyIndex       int
-	currentMessage     string
-	spinner            spinner.Model
+	app                    *app.App
+	width, height          int
+	textarea               textarea.Model
+	attachments            []app.Attachment
+	history                []string
+	historyIndex           int
+	currentMessage         string
+	spinner                spinner.Model
 	interruptKeyInDebounce bool
 	interruptKeyText       string
 }
@@ -327,12 +327,12 @@ func NewEditorComponent(app *app.App) EditorComponent {
 	interruptKeyText := interruptCommand.Keys()[0]
 
 	return &editorComponent{
-		app:                app,
-		textarea:           ta,
-		history:            []string{},
-		historyIndex:       0,
-		currentMessage:     "",
-		spinner:            s,
+		app:                    app,
+		textarea:               ta,
+		history:                []string{},
+		historyIndex:           0,
+		currentMessage:         "",
+		spinner:                s,
 		interruptKeyInDebounce: false,
 		interruptKeyText:       interruptKeyText,
 	}
