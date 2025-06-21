@@ -32,7 +32,7 @@ type EditorComponent interface {
 	Newline() (tea.Model, tea.Cmd)
 	Previous() (tea.Model, tea.Cmd)
 	Next() (tea.Model, tea.Cmd)
-	SetInterruptKeyInDebounce(inDebounce bool, keyText string)
+	SetInterruptKeyInDebounce(inDebounce bool)
 }
 
 type editorComponent struct {
@@ -45,7 +45,6 @@ type editorComponent struct {
 	currentMessage         string
 	spinner                spinner.Model
 	interruptKeyInDebounce bool
-	interruptKeyText       string
 }
 
 func (m *editorComponent) Init() tea.Cmd {
@@ -120,10 +119,11 @@ func (m *editorComponent) Content() string {
 
 	hint := base("enter") + muted(" send   ")
 	if m.app.IsBusy() {
+		keyText := m.getInterruptKeyText()
 		if m.interruptKeyInDebounce {
-			hint = muted("working") + m.spinner.View() + muted("  ") + base(m.interruptKeyText+" again") + muted(" interrupt")
+			hint = muted("working") + m.spinner.View() + muted("  ") + base(keyText+" again") + muted(" interrupt")
 		} else {
-			hint = muted("working") + m.spinner.View() + muted("  ") + base(m.interruptKeyText) + muted(" interrupt")
+			hint = muted("working") + m.spinner.View() + muted("  ") + base(keyText) + muted(" interrupt")
 		}
 	}
 
@@ -270,9 +270,12 @@ func (m *editorComponent) Next() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *editorComponent) SetInterruptKeyInDebounce(inDebounce bool, keyText string) {
+func (m *editorComponent) SetInterruptKeyInDebounce(inDebounce bool) {
 	m.interruptKeyInDebounce = inDebounce
-	m.interruptKeyText = keyText
+}
+
+func (m *editorComponent) getInterruptKeyText() string {
+	return m.app.Commands[commands.SessionInterruptCommand].Keys()[0]
 }
 
 func createTextArea(existing *textarea.Model) textarea.Model {
@@ -322,10 +325,6 @@ func NewEditorComponent(app *app.App) EditorComponent {
 	s := createSpinner()
 	ta := createTextArea(nil)
 
-	// Get the configured interrupt key text for display
-	interruptCommand := app.Commands[commands.SessionInterruptCommand]
-	interruptKeyText := interruptCommand.Keys()[0]
-
 	return &editorComponent{
 		app:                    app,
 		textarea:               ta,
@@ -334,6 +333,5 @@ func NewEditorComponent(app *app.App) EditorComponent {
 		currentMessage:         "",
 		spinner:                s,
 		interruptKeyInDebounce: false,
-		interruptKeyText:       interruptKeyText,
 	}
 }

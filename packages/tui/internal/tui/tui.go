@@ -189,21 +189,20 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 6. Handle interrupt key debounce for session interrupt
 		interruptCommand := a.app.Commands[commands.SessionInterruptCommand]
 		if interruptCommand.Matches(msg, a.isLeaderSequence) && a.app.IsBusy() {
-			// Get the configured key text for display
-			keyText := interruptCommand.Keys()[0]
+
 
 			switch a.interruptKeyState {
 			case InterruptKeyIdle:
 				// First interrupt key press - start debounce timer
 				a.interruptKeyState = InterruptKeyFirstPress
-				a.editor.SetInterruptKeyInDebounce(true, keyText)
+				a.editor.SetInterruptKeyInDebounce(true)
 				return a, tea.Tick(interruptDebounceTimeout, func(t time.Time) tea.Msg {
 					return InterruptDebounceTimeoutMsg{}
 				})
 			case InterruptKeyFirstPress:
 				// Second interrupt key press within timeout - actually interrupt
 				a.interruptKeyState = InterruptKeyIdle
-				a.editor.SetInterruptKeyInDebounce(false, keyText)
+				a.editor.SetInterruptKeyInDebounce(false)
 				return a, util.CmdHandler(commands.ExecuteCommandMsg(interruptCommand))
 			}
 		}
@@ -327,10 +326,7 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case InterruptDebounceTimeoutMsg:
 		// Reset interrupt key state after timeout
 		a.interruptKeyState = InterruptKeyIdle
-		// Get the interrupt key text for display
-		interruptCommand := a.app.Commands[commands.SessionInterruptCommand]
-		keyText := interruptCommand.Keys()[0]
-		a.editor.SetInterruptKeyInDebounce(false, keyText)
+		a.editor.SetInterruptKeyInDebounce(false)
 	}
 
 	// update status bar
