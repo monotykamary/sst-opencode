@@ -117,7 +117,7 @@ func (m *editorComponent) Content() string {
 		Background(t.BackgroundElement()).
 		Render(textarea)
 
-	hint := base("enter") + muted(" send   ")
+	hint := base(m.getSubmitKeyText()) + muted(" send   ")
 	if m.app.IsBusy() {
 		keyText := m.getInterruptKeyText()
 		if m.interruptKeyInDebounce {
@@ -276,6 +276,10 @@ func (m *editorComponent) SetInterruptKeyInDebounce(inDebounce bool) {
 
 func (m *editorComponent) getInterruptKeyText() string {
 	return m.app.Commands[commands.SessionInterruptCommand].Keys()[0]
+}
+
+func (m *editorComponent) getSubmitKeyText() string {
+	return m.app.Commands[commands.InputSubmitCommand].Keys()[0]
 }
 
 func createTextArea(existing *textarea.Model) textarea.Model {
