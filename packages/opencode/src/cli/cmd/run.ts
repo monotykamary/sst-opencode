@@ -8,6 +8,65 @@ import { cmd } from "./cmd"
 import { Flag } from "../../flag/flag"
 import { Config } from "../../config/config"
 import { bootstrap } from "../bootstrap"
+import { App } from "../../app/app"
+
+type OutputFormat = "text" | "json" | "stream-json"
+
+interface PrintResult {
+  type: "result"
+  subtype: "success" | "error"
+  is_error: boolean
+  duration_ms: number
+  duration_api_ms: number
+  num_turns: number
+  result: string
+  session_id: string
+  total_cost_usd: number
+  usage: {
+    input_tokens: number
+    cache_creation_input_tokens: number
+    cache_read_input_tokens: number
+    output_tokens: number
+    server_tool_use?: {
+      web_search_requests: number
+    }
+    service_tier: string
+  }
+}
+
+interface SystemInitEvent {
+  type: "system"
+  subtype: "init"
+  cwd: string
+  session_id: string
+  tools: string[]
+  mcp_servers: string[]
+  model: string
+  permissionMode: string
+  apiKeySource: string
+}
+
+interface AssistantMessageEvent {
+  type: "assistant"
+  message: {
+    id: string
+    type: "message"
+    role: "assistant"
+    model: string
+    content: Array<{ type: "text"; text: string }>
+    stop_reason: string | null
+    stop_sequence: string | null
+    usage: {
+      input_tokens: number
+      cache_creation_input_tokens: number
+      cache_read_input_tokens: number
+      output_tokens: number
+      service_tier: string
+    }
+  }
+  parent_tool_use_id: string | null
+  session_id: string
+}
 
 const TOOL: Record<string, [string, string]> = {
   todowrite: ["Todo", UI.Style.TEXT_WARNING_BOLD],
@@ -52,9 +111,73 @@ export const RunCommand = cmd({
         alias: ["m"],
         describe: "model to use in the format of provider/model",
       })
+      .option("print", {
+        alias: ["p"],
+        describe: "print mode - output result and exit",
+        type: "boolean",
+        default: false,
+      })
+      .option("output-format", {
+        describe: "output format (only with --print)",
+        type: "string",
+        choices: ["text", "json", "stream-json"] as const,
+        default: "text" as const,
+      })
+      .option("verbose", {
+        describe: "verbose output (required for stream-json with --print)",
+        type: "boolean",
+        default: false,
+      })
   },
   handler: async (args) => {
     const message = args.message.join(" ")
+    const printMode = args.print as boolean
+    const outputFormat = args["output-format"] as OutputFormat
+    const verbose = args.verbose as boolean
+
+    // Validation for print mode
+    if (printMode) {
+      if (outputFormat === "stream-json" && !verbose) {
+        console.error(
+          "Error: When using --print, --output-format=stream-json requires --verbose",
+        )
+        process.exitCode = 1
+        return
+      }
+
+      if (!message.trim()) {
+        if (outputFormat === "json") {
+          const errorResult: PrintResult = {
+            type: "result",
+            subtype: "error",
+            is_error: true,
+            duration_ms: 0,
+            duration_api_ms: 0,
+            num_turns: 0,
+            result: "No message provided",
+            session_id: "",
+            total_cost_usd: 0,
+            usage: {
+              input_tokens: 0,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+              output_tokens: 0,
+              service_tier: "standard",
+            },
+          }
+          process.stdout.write(JSON.stringify(errorResult) + "\n")
+        } else {
+          console.error("Error: No message provided")
+        }
+        process.exitCode = 1
+        return
+      }
+    }
+
+    const startTime = printMode ? Date.now() : 0
+    let apiStartTime = 0
+    let apiEndTime = 0
+
     await bootstrap({ cwd: process.cwd() }, async () => {
       const session = await (async () => {
         if (args.continue) {
@@ -75,31 +198,70 @@ export const RunCommand = cmd({
 
       const isPiped = !process.stdout.isTTY
 
-      UI.empty()
-      UI.println(UI.logo())
-      UI.empty()
-      UI.println(UI.Style.TEXT_NORMAL_BOLD + "> ", message)
-      UI.empty()
+      if (!printMode) {
+        UI.empty()
+        UI.println(UI.logo())
+        UI.empty()
+        UI.println(UI.Style.TEXT_NORMAL_BOLD + "> ", message)
+        UI.empty()
 
-      const cfg = await Config.get()
-      if (cfg.autoshare || Flag.OPENCODE_AUTO_SHARE || args.share) {
-        await Session.share(session.id)
-        UI.println(
-          UI.Style.TEXT_INFO_BOLD +
-            "~  https://opencode.ai/s/" +
-            session.id.slice(-8),
-        )
+        const cfg = await Config.get()
+        if (cfg.autoshare || Flag.OPENCODE_AUTO_SHARE || args.share) {
+          await Session.share(session.id)
+          UI.println(
+            UI.Style.TEXT_INFO_BOLD +
+              "~  https://opencode.ai/s/" +
+              session.id.slice(-8),
+          )
+        }
+        UI.empty()
       }
-      UI.empty()
 
       const { providerID, modelID } = args.model
         ? Provider.parseModel(args.model)
         : await Provider.defaultModel()
-      UI.println(
-        UI.Style.TEXT_NORMAL_BOLD + "@ ",
-        UI.Style.TEXT_NORMAL + `${providerID}/${modelID}`,
-      )
-      UI.empty()
+
+      if (!printMode) {
+        UI.println(
+          UI.Style.TEXT_NORMAL_BOLD + "@ ",
+          UI.Style.TEXT_NORMAL + `${providerID}/${modelID}`,
+        )
+        UI.empty()
+      }
+
+      // Print mode: output system init for stream-json
+      if (printMode && outputFormat === "stream-json" && verbose) {
+        const app = App.info()
+        const systemInit: SystemInitEvent = {
+          type: "system",
+          subtype: "init",
+          cwd: app.path.cwd,
+          session_id: session.id,
+          tools: [
+            "Task",
+            "Bash",
+            "Glob",
+            "Grep",
+            "LS",
+            "exit_plan_mode",
+            "Read",
+            "Edit",
+            "MultiEdit",
+            "Write",
+            "NotebookRead",
+            "NotebookEdit",
+            "WebFetch",
+            "TodoRead",
+            "TodoWrite",
+            "WebSearch",
+          ],
+          mcp_servers: [],
+          model: `${providerID}-${modelID}`,
+          permissionMode: "default",
+          apiKeySource: "ANTHROPIC_API_KEY",
+        }
+        process.stdout.write(JSON.stringify(systemInit) + "\n")
+      }
 
       function printEvent(color: string, type: string, title: string) {
         UI.println(
@@ -110,36 +272,43 @@ export const RunCommand = cmd({
         )
       }
 
-      Bus.subscribe(Message.Event.PartUpdated, async (evt) => {
-        if (evt.properties.sessionID !== session.id) return
-        const part = evt.properties.part
-        const message = await Session.getMessage(
-          evt.properties.sessionID,
-          evt.properties.messageID,
-        )
+      if (!printMode) {
+        Bus.subscribe(Message.Event.PartUpdated, async (evt) => {
+          if (evt.properties.sessionID !== session.id) return
+          const part = evt.properties.part
+          const message = await Session.getMessage(
+            evt.properties.sessionID,
+            evt.properties.messageID,
+          )
 
-        if (
-          part.type === "tool-invocation" &&
-          part.toolInvocation.state === "result"
-        ) {
-          const metadata = message.metadata.tool[part.toolInvocation.toolCallId]
-          const [tool, color] = TOOL[part.toolInvocation.toolName] ?? [
-            part.toolInvocation.toolName,
-            UI.Style.TEXT_INFO_BOLD,
-          ]
-          printEvent(color, tool, metadata?.title || "Unknown")
-        }
-
-        if (part.type === "text") {
-          if (part.text.includes("\n")) {
-            UI.empty()
-            UI.println(part.text)
-            UI.empty()
-            return
+          if (
+            part.type === "tool-invocation" &&
+            part.toolInvocation.state === "result"
+          ) {
+            const metadata =
+              message.metadata.tool[part.toolInvocation.toolCallId]
+            const [tool, color] = TOOL[part.toolInvocation.toolName] ?? [
+              part.toolInvocation.toolName,
+              UI.Style.TEXT_INFO_BOLD,
+            ]
+            printEvent(color, tool, metadata?.title || "Unknown")
           }
-          printEvent(UI.Style.TEXT_NORMAL_BOLD, "Text", part.text)
-        }
-      })
+
+          if (part.type === "text") {
+            if (part.text.includes("\n")) {
+              UI.empty()
+              UI.println(part.text)
+              UI.empty()
+              return
+            }
+            printEvent(UI.Style.TEXT_NORMAL_BOLD, "Text", part.text)
+          }
+        })
+      }
+
+      if (printMode) {
+        apiStartTime = Date.now()
+      }
 
       const result = await Session.chat({
         sessionID: session.id,
@@ -153,11 +322,111 @@ export const RunCommand = cmd({
         ],
       })
 
-      if (isPiped) {
-        const match = result.parts.findLast((x) => x.type === "text")
-        if (match) process.stdout.write(match.text)
+      if (printMode) {
+        apiEndTime = Date.now()
+        const endTime = Date.now()
+
+        const textResult =
+          result.parts.findLast((x) => x.type === "text")?.text || ""
+        const assistant = result.metadata.assistant
+        const totalCost = assistant?.cost || 0
+        const tokens = assistant?.tokens || {
+          input: 0,
+          output: 0,
+          cache: { read: 0, write: 0 },
+        }
+
+        switch (outputFormat) {
+          case "text":
+            process.stdout.write(textResult)
+            break
+
+          case "json":
+            const jsonResult: PrintResult = {
+              type: "result",
+              subtype: result.metadata.error ? "error" : "success",
+              is_error: !!result.metadata.error,
+              duration_ms: endTime - startTime,
+              duration_api_ms: apiEndTime - apiStartTime,
+              num_turns: 1,
+              result: textResult,
+              session_id: session.id,
+              total_cost_usd: totalCost,
+              usage: {
+                input_tokens: tokens.input,
+                cache_creation_input_tokens: tokens.cache.write,
+                cache_read_input_tokens: tokens.cache.read,
+                output_tokens: tokens.output,
+                server_tool_use: {
+                  web_search_requests: 0,
+                },
+                service_tier: "standard",
+              },
+            }
+            process.stdout.write(JSON.stringify(jsonResult) + "\n")
+            break
+
+          case "stream-json":
+            if (verbose) {
+              const assistantMessage: AssistantMessageEvent = {
+                type: "assistant",
+                message: {
+                  id: result.id,
+                  type: "message",
+                  role: "assistant",
+                  model: `${providerID}-${modelID}`,
+                  content: [{ type: "text", text: textResult }],
+                  stop_reason: null,
+                  stop_sequence: null,
+                  usage: {
+                    input_tokens: tokens.input,
+                    cache_creation_input_tokens: tokens.cache.write,
+                    cache_read_input_tokens: tokens.cache.read,
+                    output_tokens: tokens.output,
+                    service_tier: "standard",
+                  },
+                },
+                parent_tool_use_id: null,
+                session_id: session.id,
+              }
+              process.stdout.write(JSON.stringify(assistantMessage) + "\n")
+
+              const finalResult: PrintResult = {
+                type: "result",
+                subtype: result.metadata.error ? "error" : "success",
+                is_error: !!result.metadata.error,
+                duration_ms: endTime - startTime,
+                duration_api_ms: apiEndTime - apiStartTime,
+                num_turns: 1,
+                result: textResult,
+                session_id: session.id,
+                total_cost_usd: totalCost,
+                usage: {
+                  input_tokens: tokens.input,
+                  cache_creation_input_tokens: tokens.cache.write,
+                  cache_read_input_tokens: tokens.cache.read,
+                  output_tokens: tokens.output,
+                  server_tool_use: {
+                    web_search_requests: 0,
+                  },
+                  service_tier: "standard",
+                },
+              }
+              process.stdout.write(JSON.stringify(finalResult) + "\n")
+            }
+            break
+        }
+
+        if (result.metadata.error) {
+          process.exitCode = 1
+        }
+      } else {
+        if (isPiped) {
+          const match = result.parts.findLast((x) => x.type === "text")
+          if (match) process.stdout.write(match.text)
+        }
+        UI.empty()
       }
-      UI.empty()
     })
   },
 })
