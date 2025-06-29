@@ -9,6 +9,8 @@ import { Flag } from "../../flag/flag"
 import { Config } from "../../config/config"
 import { bootstrap } from "../bootstrap"
 import { App } from "../../app/app"
+import { MCP } from "../../mcp"
+import { Auth } from "../../auth"
 
 type OutputFormat = "text" | "json" | "stream-json"
 
@@ -79,6 +81,87 @@ const TOOL: Record<string, [string, string]> = {
   read: ["Read", UI.Style.TEXT_HIGHLIGHT_BOLD],
   write: ["Write", UI.Style.TEXT_SUCCESS_BOLD],
   websearch: ["Search", UI.Style.TEXT_DIM_BOLD],
+}
+
+async function getAvailableTools(providerID: string): Promise<string[]> {
+  const tools = await Provider.tools(providerID)
+  const mcpTools = await MCP.tools()
+
+  const toolNames = tools.map((tool) => {
+    // Convert tool IDs to display names
+    switch (tool.id) {
+      case "bash":
+        return "Bash"
+      case "edit":
+        return "Edit"
+      case "multiedit":
+        return "MultiEdit"
+      case "glob":
+        return "Glob"
+      case "grep":
+        return "Grep"
+      case "list":
+        return "LS"
+      case "read":
+        return "Read"
+      case "write":
+        return "Write"
+      case "webfetch":
+        return "WebFetch"
+      case "todoread":
+        return "TodoRead"
+      case "todowrite":
+        return "TodoWrite"
+      case "task":
+        return "Task"
+      case "lsp.diagnostics":
+        return "LSPDiagnostics"
+      case "lsp.hover":
+        return "LSPHover"
+      case "patch":
+        return "Patch"
+      default:
+        return tool.id
+    }
+  })
+
+  // Add MCP tool names
+  const mcpToolNames = Object.keys(mcpTools)
+
+  return [...toolNames, ...mcpToolNames]
+}
+
+async function getAvailableMCPServers(): Promise<string[]> {
+  const clients = await MCP.clients()
+  return Object.keys(clients)
+}
+
+async function getAPIKeySource(providerID: string): Promise<string> {
+  const authInfo = await Auth.get(providerID)
+
+  if (authInfo?.type === "api") {
+    return `${providerID.toUpperCase()}_API_KEY`
+  }
+
+  if (authInfo?.type === "oauth") {
+    return `${providerID.toUpperCase()}_OAUTH`
+  }
+
+  // Check environment variables
+  const envVars = [
+    `${providerID.toUpperCase()}_API_KEY`,
+    `OPENAI_API_KEY`,
+    `ANTHROPIC_API_KEY`,
+    `GOOGLE_API_KEY`,
+  ]
+
+  for (const envVar of envVars) {
+    if (process.env[envVar]) {
+      return envVar
+    }
+  }
+
+  return "UNKNOWN"
 }
 
 export const RunCommand = cmd({
@@ -232,33 +315,20 @@ export const RunCommand = cmd({
       // Print mode: output system init for stream-json
       if (printMode && outputFormat === "stream-json" && verbose) {
         const app = App.info()
+        const tools = await getAvailableTools(providerID)
+        const mcpServers = await getAvailableMCPServers()
+        const apiKeySource = await getAPIKeySource(providerID)
+
         const systemInit: SystemInitEvent = {
           type: "system",
           subtype: "init",
           cwd: app.path.cwd,
           session_id: session.id,
-          tools: [
-            "Task",
-            "Bash",
-            "Glob",
-            "Grep",
-            "LS",
-            "exit_plan_mode",
-            "Read",
-            "Edit",
-            "MultiEdit",
-            "Write",
-            "NotebookRead",
-            "NotebookEdit",
-            "WebFetch",
-            "TodoRead",
-            "TodoWrite",
-            "WebSearch",
-          ],
-          mcp_servers: [],
+          tools,
+          mcp_servers: mcpServers,
           model: `${providerID}-${modelID}`,
           permissionMode: "default",
-          apiKeySource: "ANTHROPIC_API_KEY",
+          apiKeySource,
         }
         process.stdout.write(JSON.stringify(systemInit) + "\n")
       }
