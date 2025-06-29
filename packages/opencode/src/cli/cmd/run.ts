@@ -71,8 +71,8 @@ interface AssistantMessageEvent {
 }
 
 const TOOL: Record<string, [string, string]> = {
-  todowrite: ["TodoWrite", UI.Style.TEXT_WARNING_BOLD],
-  todoread: ["TodoRead", UI.Style.TEXT_WARNING_BOLD],
+  todowrite: ["Todo", UI.Style.TEXT_WARNING_BOLD],
+  todoread: ["Todo", UI.Style.TEXT_WARNING_BOLD],
   bash: ["Bash", UI.Style.TEXT_DANGER_BOLD],
   edit: ["Edit", UI.Style.TEXT_SUCCESS_BOLD],
   glob: ["Glob", UI.Style.TEXT_INFO_BOLD],
@@ -81,20 +81,38 @@ const TOOL: Record<string, [string, string]> = {
   read: ["Read", UI.Style.TEXT_HIGHLIGHT_BOLD],
   write: ["Write", UI.Style.TEXT_SUCCESS_BOLD],
   websearch: ["Search", UI.Style.TEXT_DIM_BOLD],
-  webfetch: ["WebFetch", UI.Style.TEXT_INFO_BOLD],
-  lsp_diagnostics: ["LSPDiagnostics", UI.Style.TEXT_DIM_BOLD],
-  lsp_hover: ["LSPHover", UI.Style.TEXT_DIM_BOLD],
+  webfetch: ["Fetch", UI.Style.TEXT_INFO_BOLD],
+  lsp_diagnostics: ["LSP", UI.Style.TEXT_DIM_BOLD],
+  lsp_hover: ["LSP", UI.Style.TEXT_DIM_BOLD],
   patch: ["Patch", UI.Style.TEXT_SUCCESS_BOLD],
+}
+
+// Separate mapping for stream-json output with full descriptive names
+const STREAM_TOOL_NAMES: Record<string, string> = {
+  todowrite: "TodoWrite",
+  todoread: "TodoRead",
+  bash: "Bash",
+  edit: "Edit",
+  glob: "Glob",
+  grep: "Grep",
+  list: "List",
+  read: "Read",
+  write: "Write",
+  websearch: "WebSearch",
+  webfetch: "WebFetch",
+  lsp_diagnostics: "LSPDiagnostics",
+  lsp_hover: "LSPHover",
+  patch: "Patch",
 }
 
 async function getAvailableTools(providerID: string): Promise<string[]> {
   const tools = await Provider.tools(providerID)
   const mcpTools = await MCP.tools()
 
-  // Use existing TOOL mapping for display names, fallback to tool ID
+  // Use stream-json specific tool names for full descriptive names
   const toolNames = tools.map((tool) => {
-    const displayName = TOOL[tool.id]?.[0]
-    return displayName || tool.id
+    const streamName = STREAM_TOOL_NAMES[tool.id]
+    return streamName || tool.id
   })
 
   // Add MCP tool names
