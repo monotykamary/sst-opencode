@@ -398,7 +398,7 @@ export const RunCommand = cmd({
 
         switch (outputFormat) {
           case "text":
-            process.stdout.write(textResult)
+            process.stdout.write(textResult + "\n")
             break
 
           case "json":
