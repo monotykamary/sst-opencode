@@ -81,48 +81,20 @@ const TOOL: Record<string, [string, string]> = {
   read: ["Read", UI.Style.TEXT_HIGHLIGHT_BOLD],
   write: ["Write", UI.Style.TEXT_SUCCESS_BOLD],
   websearch: ["Search", UI.Style.TEXT_DIM_BOLD],
+  webfetch: ["WebFetch", UI.Style.TEXT_INFO_BOLD],
+  lsp_diagnostics: ["LSPDiagnostics", UI.Style.TEXT_DIM_BOLD],
+  lsp_hover: ["LSPHover", UI.Style.TEXT_DIM_BOLD],
+  patch: ["Patch", UI.Style.TEXT_SUCCESS_BOLD],
 }
 
 async function getAvailableTools(providerID: string): Promise<string[]> {
   const tools = await Provider.tools(providerID)
   const mcpTools = await MCP.tools()
 
+  // Use existing TOOL mapping for display names, fallback to tool ID
   const toolNames = tools.map((tool) => {
-    // Convert tool IDs to display names
-    switch (tool.id) {
-      case "bash":
-        return "Bash"
-      case "edit":
-        return "Edit"
-      case "multiedit":
-        return "MultiEdit"
-      case "glob":
-        return "Glob"
-      case "grep":
-        return "Grep"
-      case "list":
-        return "LS"
-      case "read":
-        return "Read"
-      case "write":
-        return "Write"
-      case "webfetch":
-        return "WebFetch"
-      case "todoread":
-        return "TodoRead"
-      case "todowrite":
-        return "TodoWrite"
-      case "task":
-        return "Task"
-      case "lsp.diagnostics":
-        return "LSPDiagnostics"
-      case "lsp.hover":
-        return "LSPHover"
-      case "patch":
-        return "Patch"
-      default:
-        return tool.id
-    }
+    const displayName = TOOL[tool.id]?.[0]
+    return displayName || tool.id
   })
 
   // Add MCP tool names
