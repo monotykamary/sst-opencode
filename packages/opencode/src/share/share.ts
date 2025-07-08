@@ -53,9 +53,7 @@ export namespace Share {
 
   export const URL =
     process.env["OPENCODE_API"] ??
-    (Installation.isSnapshot() || Installation.isDev()
-      ? "https://api.dev.opencode.ai"
-      : "https://api.opencode.ai")
+    (Installation.isSnapshot() || Installation.isDev() ? "https://api.dev.opencode.ai" : "https://api.opencode.ai")
 
   export async function create(sessionID: string) {
     return fetch(`${URL}/share_create`, {
@@ -66,10 +64,10 @@ export namespace Share {
       .then((x) => x as { url: string; secret: string })
   }
 
-  export async function remove(id: string) {
+  export async function remove(sessionID: string, secret: string) {
     return fetch(`${URL}/share_delete`, {
       method: "POST",
-      body: JSON.stringify({ id }),
+      body: JSON.stringify({ sessionID, secret }),
     }).then((x) => x.json())
   }
 }

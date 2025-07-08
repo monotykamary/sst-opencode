@@ -6,14 +6,16 @@ import { streamSSE } from "hono/streaming"
 import { Session } from "../session"
 import { resolver, validator as zValidator } from "hono-openapi/zod"
 import { z } from "zod"
-import { Message } from "../session/message"
 import { Provider } from "../provider/provider"
 import { App } from "../app/app"
 import { mapValues } from "remeda"
 import { NamedError } from "../util/error"
 import { ModelsDev } from "../provider/models"
-import { Ripgrep } from "../external/ripgrep"
+import { Ripgrep } from "../file/ripgrep"
 import { Config } from "../config/config"
+import { File } from "../file"
+import { LSP } from "../lsp"
+import { MessageV2 } from "../session/message-v2"
 
 const ERRORS = {
   400: {
@@ -49,12 +51,9 @@ export namespace Server {
             status: 400,
           })
         }
-        return c.json(
-          new NamedError.Unknown({ message: err.toString() }).toObject(),
-          {
-            status: 400,
-          },
-        )
+        return c.json(new NamedError.Unknown({ message: err.toString() }).toObject(), {
+          status: 400,
+        })
       })
       .use(async (c, next) => {
         log.info("request", {
@@ -73,7 +72,7 @@ export namespace Server {
           documentation: {
             info: {
               title: "opencode",
-              version: "0.0.2",
+              version: "0.0.3",
               description: "opencode api",
             },
             openapi: "3.0.0",
@@ -405,7 +404,7 @@ export namespace Server {
               description: "List of messages",
               content: {
                 "application/json": {
-                  schema: resolver(Message.Info.array()),
+                  schema: resolver(MessageV2.Info.array()),
                 },
               },
             },
@@ -431,7 +430,7 @@ export namespace Server {
               description: "Created message",
               content: {
                 "application/json": {
-                  schema: resolver(Message.Info),
+                  schema: resolver(MessageV2.Assistant),
                 },
               },
             },
@@ -448,7 +447,7 @@ export namespace Server {
           z.object({
             providerID: z.string(),
             modelID: z.string(),
-            parts: Message.MessagePart.array(),
+            parts: MessageV2.UserPart.array(),
           }),
         ),
         async (c) => {
@@ -479,25 +478,52 @@ export namespace Server {
           },
         }),
         async (c) => {
-          const providers = await Provider.list().then((x) =>
-            mapValues(x, (item) => item.info),
-          )
+          const providers = await Provider.list().then((x) => mapValues(x, (item) => item.info))
           return c.json({
             providers: Object.values(providers),
-            default: mapValues(
-              providers,
-              (item) => Provider.sort(Object.values(item.models))[0].id,
-            ),
+            default: mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0].id),
           })
         },
       )
       .get(
-        "/file",
+        "/find",
         describeRoute({
-          description: "Search for files",
+          description: "Find text in files",
           responses: {
             200: {
-              description: "Search for files",
+              description: "Matches",
+              content: {
+                "application/json": {
+                  schema: resolver(Ripgrep.Match.shape.data.array()),
+                },
+              },
+            },
+          },
+        }),
+        zValidator(
+          "query",
+          z.object({
+            pattern: z.string(),
+          }),
+        ),
+        async (c) => {
+          const app = App.info()
+          const pattern = c.req.valid("query").pattern
+          const result = await Ripgrep.search({
+            cwd: app.path.cwd,
+            pattern,
+            limit: 10,
+          })
+          return c.json(result)
+        },
+      )
+      .get(
+        "/find/file",
+        describeRoute({
+          description: "Find files",
+          responses: {
+            200: {
+              description: "File paths",
               content: {
                 "application/json": {
                   schema: resolver(z.string().array()),
@@ -521,6 +547,98 @@ export namespace Server {
             limit: 10,
           })
           return c.json(result)
+        },
+      )
+      .get(
+        "/find/symbol",
+        describeRoute({
+          description: "Find workspace symbols",
+          responses: {
+            200: {
+              description: "Symbols",
+              content: {
+                "application/json": {
+                  schema: resolver(z.unknown().array()),
+                },
+              },
+            },
+          },
+        }),
+        zValidator(
+          "query",
+          z.object({
+            query: z.string(),
+          }),
+        ),
+        async (c) => {
+          const query = c.req.valid("query").query
+          const result = await LSP.workspaceSymbol(query)
+          return c.json(result)
+        },
+      )
+      .get(
+        "/file",
+        describeRoute({
+          description: "Read a file",
+          responses: {
+            200: {
+              description: "File content",
+              content: {
+                "application/json": {
+                  schema: resolver(
+                    z.object({
+                      type: z.enum(["raw", "patch"]),
+                      content: z.string(),
+                    }),
+                  ),
+                },
+              },
+            },
+          },
+        }),
+        zValidator(
+          "query",
+          z.object({
+            path: z.string(),
+          }),
+        ),
+        async (c) => {
+          const path = c.req.valid("query").path
+          const content = await File.read(path)
+          log.info("read file", {
+            path,
+            content: content.content,
+          })
+          return c.json(content)
+        },
+      )
+      .get(
+        "/file/status",
+        describeRoute({
+          description: "Get file status",
+          responses: {
+            200: {
+              description: "File status",
+              content: {
+                "application/json": {
+                  schema: resolver(
+                    z
+                      .object({
+                        file: z.string(),
+                        added: z.number().int(),
+                        removed: z.number().int(),
+                        status: z.enum(["added", "deleted", "modified"]),
+                      })
+                      .array(),
+                  ),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          const content = await File.status()
+          return c.json(content)
         },
       )
 

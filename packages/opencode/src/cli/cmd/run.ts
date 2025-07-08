@@ -2,7 +2,6 @@ import type { Argv } from "yargs"
 import { Bus } from "../../bus"
 import { Provider } from "../../provider/provider"
 import { Session } from "../../session"
-import { Message } from "../../session/message"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { Flag } from "../../flag/flag"
@@ -11,6 +10,7 @@ import { bootstrap } from "../bootstrap"
 import { App } from "../../app/app"
 import { MCP } from "../../mcp"
 import { Auth } from "../../auth"
+import { MessageV2 } from "../../session/message-v2"
 
 type OutputFormat = "text" | "json" | "stream-json"
 
@@ -138,12 +138,7 @@ async function getAPIKeySource(providerID: string): Promise<string> {
   }
 
   // Check environment variables
-  const envVars = [
-    `${providerID.toUpperCase()}_API_KEY`,
-    `OPENAI_API_KEY`,
-    `ANTHROPIC_API_KEY`,
-    `GOOGLE_API_KEY`,
-  ]
+  const envVars = [`${providerID.toUpperCase()}_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`]
 
   for (const envVar of envVars) {
     if (process.env[envVar]) {
@@ -203,17 +198,17 @@ export const RunCommand = cmd({
       })
   },
   handler: async (args) => {
-    const message = args.message.join(" ")
+    let message = args.message.join(" ")
     const printMode = args.print as boolean
     const outputFormat = args["output-format"] as OutputFormat
     const verbose = args.verbose as boolean
 
+    if (!process.stdin.isTTY) message += "\n" + (await Bun.stdin.text())
+
     // Validation for print mode
     if (printMode) {
       if (outputFormat === "stream-json" && !verbose) {
-        console.error(
-          "Error: When using --print, --output-format=stream-json requires --verbose",
-        )
+        console.error("Error: When using --print, --output-format=stream-json requires --verbose")
         process.exitCode = 1
         return
       }
@@ -275,30 +270,22 @@ export const RunCommand = cmd({
         UI.empty()
         UI.println(UI.logo())
         UI.empty()
-        UI.println(UI.Style.TEXT_NORMAL_BOLD + "> ", message)
+        const displayMessage = message.length > 300 ? message.slice(0, 300) + "..." : message
+        UI.println(UI.Style.TEXT_NORMAL_BOLD + "> ", displayMessage)
         UI.empty()
 
         const cfg = await Config.get()
         if (cfg.autoshare || Flag.OPENCODE_AUTO_SHARE || args.share) {
           await Session.share(session.id)
-          UI.println(
-            UI.Style.TEXT_INFO_BOLD +
-              "~  https://opencode.ai/s/" +
-              session.id.slice(-8),
-          )
+          UI.println(UI.Style.TEXT_INFO_BOLD + "~  https://opencode.ai/s/" + session.id.slice(-8))
         }
         UI.empty()
       }
 
-      const { providerID, modelID } = args.model
-        ? Provider.parseModel(args.model)
-        : await Provider.defaultModel()
+      const { providerID, modelID } = args.model ? Provider.parseModel(args.model) : await Provider.defaultModel()
 
       if (!printMode) {
-        UI.println(
-          UI.Style.TEXT_NORMAL_BOLD + "@ ",
-          UI.Style.TEXT_NORMAL + `${providerID}/${modelID}`,
-        )
+        UI.println(UI.Style.TEXT_NORMAL_BOLD + "@ ", UI.Style.TEXT_NORMAL + `${providerID}/${modelID}`)
         UI.empty()
       }
 
@@ -333,25 +320,13 @@ export const RunCommand = cmd({
       }
 
       if (!printMode) {
-        Bus.subscribe(Message.Event.PartUpdated, async (evt) => {
+        Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
           if (evt.properties.sessionID !== session.id) return
           const part = evt.properties.part
-          const message = await Session.getMessage(
-            evt.properties.sessionID,
-            evt.properties.messageID,
-          )
 
-          if (
-            part.type === "tool-invocation" &&
-            part.toolInvocation.state === "result"
-          ) {
-            const metadata =
-              message.metadata.tool[part.toolInvocation.toolCallId]
-            const [tool, color] = TOOL[part.toolInvocation.toolName] ?? [
-              part.toolInvocation.toolName,
-              UI.Style.TEXT_INFO_BOLD,
-            ]
-            printEvent(color, tool, metadata?.title || "Unknown")
+          if (part.type === "tool" && part.state.status === "completed") {
+            const [tool, color] = TOOL[part.tool] ?? [part.tool, UI.Style.TEXT_INFO_BOLD]
+            printEvent(color, tool, part.state.title || "Unknown")
           }
 
           if (part.type === "text") {
@@ -386,8 +361,7 @@ export const RunCommand = cmd({
         apiEndTime = Date.now()
         const endTime = Date.now()
 
-        const textResult =
-          result.parts.findLast((x) => x.type === "text")?.text || ""
+        const textResult = result.parts.findLast((x) => x.type === "text")?.text || ""
         const assistant = result.metadata.assistant
         const totalCost = assistant?.cost || 0
         const tokens = assistant?.tokens || {

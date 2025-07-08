@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/sst/opencode-sdk-go"
 	"github.com/sst/opencode/internal/app"
 	"github.com/sst/opencode/internal/styles"
 	"github.com/sst/opencode/internal/theme"
@@ -37,7 +38,11 @@ func (m statusComponent) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m statusComponent) logo() string {
 	t := theme.CurrentTheme()
 	base := styles.NewStyle().Foreground(t.TextMuted()).Background(t.BackgroundElement()).Render
-	emphasis := styles.NewStyle().Foreground(t.Text()).Background(t.BackgroundElement()).Bold(true).Render
+	emphasis := styles.NewStyle().
+		Foreground(t.Text()).
+		Background(t.BackgroundElement()).
+		Bold(true).
+		Render
 
 	open := base("open")
 	code := emphasis("code ")
@@ -72,19 +77,16 @@ func formatTokensAndCost(tokens float64, contextWindow float64, cost float64) st
 	formattedCost := fmt.Sprintf("$%.2f", cost)
 	percentage := (float64(tokens) / float64(contextWindow)) * 100
 
-	return fmt.Sprintf("Context: %s (%d%%), Cost: %s", formattedTokens, int(percentage), formattedCost)
+	return fmt.Sprintf(
+		"Context: %s (%d%%), Cost: %s",
+		formattedTokens,
+		int(percentage),
+		formattedCost,
+	)
 }
 
 func (m statusComponent) View() string {
 	t := theme.CurrentTheme()
-	if m.app.Session.ID == "" {
-		return styles.NewStyle().
-			Background(t.Background()).
-			Width(m.width).
-			Height(2).
-			Render("")
-	}
-
 	logo := m.logo()
 
 	cwd := styles.NewStyle().
@@ -100,18 +102,20 @@ func (m statusComponent) View() string {
 		contextWindow := m.app.Model.Limit.Context
 
 		for _, message := range m.app.Messages {
-			cost += message.Metadata.Assistant.Cost
-			usage := message.Metadata.Assistant.Tokens
-			if usage.Output > 0 {
-				if message.Metadata.Assistant.Summary {
-					tokens = usage.Output
-					continue
+			if assistant, ok := message.(opencode.AssistantMessage); ok {
+				cost += assistant.Cost
+				usage := assistant.Tokens
+				if usage.Output > 0 {
+					if assistant.Summary {
+						tokens = usage.Output
+						continue
+					}
+					tokens = (usage.Input +
+						usage.Cache.Write +
+						usage.Cache.Read +
+						usage.Output +
+						usage.Reasoning)
 				}
-				tokens = (usage.Input +
-					usage.Cache.Write +
-					usage.Cache.Read +
-					usage.Output +
-					usage.Reasoning)
 			}
 		}
 

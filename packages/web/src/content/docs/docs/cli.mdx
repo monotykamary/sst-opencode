@@ -1,5 +1,6 @@
 ---
 title: CLI
+description: The opencode CLI options and commands.
 ---
 
 Running the opencode CLI starts it for the current directory.
@@ -20,6 +21,8 @@ opencode /path/to/project
 
 The opencode CLI also has the following commands.
 
+---
+
 ### run
 
 Run opencode in non-interactive mode by passing a prompt directly.
@@ -36,12 +39,12 @@ opencode run Explain the use of context in Go
 
 #### Flags
 
-| Flag              | Short | Description |
-| ----------------- | ----- | --------------------- |
-| `--continue`          | `-c`  | Continue the last session |
-| `--session`          | `-s`  | Session ID to continue |
-| `--share`          |   | Share the session |
-| `--model`          | `-m`  | Mode to use in the form of provider/model |
+| Flag         | Short | Description                                |
+| ------------ | ----- | ------------------------------------------ |
+| `--continue` | `-c`  | Continue the last session                  |
+| `--session`  | `-s`  | Session ID to continue                     |
+| `--share`    |       | Share the session                          |
+| `--model`    | `-m`  | Model to use in the form of provider/model |
 
 ---
 
@@ -53,6 +56,8 @@ Command to manage credentials and login for providers.
 opencode auth [command]
 ```
 
+---
+
 #### login
 
 Logs you into a provider and saves them in the credentials file in `~/.local/share/opencode/auth.json`.
@@ -62,6 +67,8 @@ opencode auth login
 ```
 
 When opencode starts up it will loads the providers from the credentials file. And if there are any keys defined in your environments or a `.env` file in your project.
+
+---
 
 #### list
 
@@ -76,6 +83,8 @@ Or the short version.
 ```bash
 opencode auth ls
 ```
+
+---
 
 #### logout
 
@@ -113,8 +122,8 @@ opencode upgrade v0.1.48
 
 The opencode CLI takes the following flags.
 
-| Flag              | Short | Description |
-| ----------------- | ----- | --------------------- |
-| `--help`          | `-h`  | Display help |
-| `--version`       |       | Print version number |
-| `--print-logs`    |       | Print logs to stderr |
+| Flag           | Short | Description          |
+| -------------- | ----- | -------------------- |
+| `--help`       | `-h`  | Display help         |
+| `--version`    |       | Print version number |
+| `--print-logs` |       | Print logs to stderr |

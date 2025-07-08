@@ -40,7 +40,7 @@ for (const [os, arch] of targets) {
   console.log(`building ${os}-${arch}`)
   const name = `${pkg.name}-${os}-${arch}`
   await $`mkdir -p dist/${name}/bin`
-  await $`GOOS=${os} GOARCH=${GOARCH[arch]} go build -ldflags="-s -w -X main.Version=${version}" -o ../opencode/dist/${name}/bin/tui ../tui/cmd/opencode/main.go`.cwd(
+  await $`CGO_ENABLED=0 GOOS=${os} GOARCH=${GOARCH[arch]} go build -ldflags="-s -w -X main.Version=${version}" -o ../opencode/dist/${name}/bin/tui ../tui/cmd/opencode/main.go`.cwd(
     "../tui",
   )
   await $`bun build --define OPENCODE_VERSION="'${version}'" --compile --minify --target=bun-${os}-${arch} --outfile=dist/${name}/bin/opencode ./src/index.ts ./dist/${name}/bin/tui`
@@ -57,8 +57,7 @@ for (const [os, arch] of targets) {
       2,
     ),
   )
-  if (!dry)
-    await $`cd dist/${name} && bun publish --access public --tag ${npmTag}`
+  if (!dry) await $`cd dist/${name} && bun publish --access public --tag ${npmTag}`
   optionalDependencies[name] = version
 }
 
@@ -82,8 +81,7 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
     2,
   ),
 )
-if (!dry)
-  await $`cd ./dist/${pkg.name} && bun publish --access public --tag ${npmTag}`
+if (!dry) await $`cd ./dist/${pkg.name} && bun publish --access public --tag ${npmTag}`
 
 if (!snapshot) {
   // Github Release
@@ -91,15 +89,11 @@ if (!snapshot) {
     await $`cd dist/${key}/bin && zip -r ../../${key}.zip *`
   }
 
-  const previous = await fetch(
-    "https://api.github.com/repos/sst/opencode/releases/latest",
-  )
+  const previous = await fetch("https://api.github.com/repos/sst/opencode/releases/latest")
     .then((res) => res.json())
     .then((data) => data.tag_name)
 
-  const commits = await fetch(
-    `https://api.github.com/repos/sst/opencode/compare/${previous}...HEAD`,
-  )
+  const commits = await fetch(`https://api.github.com/repos/sst/opencode/compare/${previous}...HEAD`)
     .then((res) => res.json())
     .then((data) => data.commits || [])
 
@@ -110,32 +104,20 @@ if (!snapshot) {
       return (
         !lower.includes("ignore:") &&
         !lower.includes("ci:") &&
+        !lower.includes("wip:") &&
         !lower.includes("docs:") &&
         !lower.includes("doc:")
       )
     })
     .join("\n")
 
-  if (!dry)
-    await $`gh release create v${version} --title "v${version}" --notes ${notes} ./dist/*.zip`
+  if (!dry) await $`gh release create v${version} --title "v${version}" --notes ${notes} ./dist/*.zip`
 
   // Calculate SHA values
-  const arm64Sha =
-    await $`sha256sum ./dist/opencode-linux-arm64.zip | cut -d' ' -f1`
-      .text()
-      .then((x) => x.trim())
-  const x64Sha =
-    await $`sha256sum ./dist/opencode-linux-x64.zip | cut -d' ' -f1`
-      .text()
-      .then((x) => x.trim())
-  const macX64Sha =
-    await $`sha256sum ./dist/opencode-darwin-x64.zip | cut -d' ' -f1`
-      .text()
-      .then((x) => x.trim())
-  const macArm64Sha =
-    await $`sha256sum ./dist/opencode-darwin-arm64.zip | cut -d' ' -f1`
-      .text()
-      .then((x) => x.trim())
+  const arm64Sha = await $`sha256sum ./dist/opencode-linux-arm64.zip | cut -d' ' -f1`.text().then((x) => x.trim())
+  const x64Sha = await $`sha256sum ./dist/opencode-linux-x64.zip | cut -d' ' -f1`.text().then((x) => x.trim())
+  const macX64Sha = await $`sha256sum ./dist/opencode-darwin-x64.zip | cut -d' ' -f1`.text().then((x) => x.trim())
+  const macArm64Sha = await $`sha256sum ./dist/opencode-darwin-arm64.zip | cut -d' ' -f1`.text().then((x) => x.trim())
 
   // AUR package
   const pkgbuild = [
@@ -169,9 +151,7 @@ if (!snapshot) {
   for (const pkg of ["opencode", "opencode-bin"]) {
     await $`rm -rf ./dist/aur-${pkg}`
     await $`git clone ssh://aur@aur.archlinux.org/${pkg}.git ./dist/aur-${pkg}`
-    await Bun.file(`./dist/aur-${pkg}/PKGBUILD`).write(
-      pkgbuild.replace("${pkg}", pkg),
-    )
+    await Bun.file(`./dist/aur-${pkg}/PKGBUILD`).write(pkgbuild.replace("${pkg}", pkg))
     await $`cd ./dist/aur-${pkg} && makepkg --printsrcinfo > .SRCINFO`
     await $`cd ./dist/aur-${pkg} && git add PKGBUILD .SRCINFO`
     await $`cd ./dist/aur-${pkg} && git commit -m "Update to v${version}"`

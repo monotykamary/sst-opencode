@@ -3,7 +3,6 @@ import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 import { RunCommand } from "./cli/cmd/run"
 import { GenerateCommand } from "./cli/cmd/generate"
-import { ScrapCommand } from "./cli/cmd/scrap"
 import { Log } from "./util/log"
 import { AuthCommand } from "./cli/cmd/auth"
 import { UpgradeCommand } from "./cli/cmd/upgrade"
@@ -14,6 +13,7 @@ import { NamedError } from "./util/error"
 import { FormatError } from "./cli/error"
 import { ServeCommand } from "./cli/cmd/serve"
 import { TuiCommand } from "./cli/cmd/tui"
+import { DebugCommand } from "./cli/cmd/debug"
 
 const cancel = new AbortController()
 
@@ -49,16 +49,13 @@ const cli = yargs(hideBin(process.argv))
   .command(TuiCommand)
   .command(RunCommand)
   .command(GenerateCommand)
-  .command(ScrapCommand)
+  .command(DebugCommand)
   .command(AuthCommand)
   .command(UpgradeCommand)
   .command(ServeCommand)
   .command(ModelsCommand)
   .fail((msg) => {
-    if (
-      msg.startsWith("Unknown argument") ||
-      msg.startsWith("Not enough non-option arguments")
-    ) {
+    if (msg.startsWith("Unknown argument") || msg.startsWith("Not enough non-option arguments")) {
       cli.showHelp("log")
     }
   })
@@ -97,10 +94,7 @@ try {
   Log.Default.error("fatal", data)
   const formatted = FormatError(e)
   if (formatted) UI.error(formatted)
-  if (formatted === undefined)
-    UI.error(
-      "Unexpected error, check log file at " + Log.file() + " for more details",
-    )
+  if (formatted === undefined) UI.error("Unexpected error, check log file at " + Log.file() + " for more details")
   process.exitCode = 1
 }
 

@@ -36,29 +36,23 @@ export namespace App {
     services: Map<any, { state: any; shutdown?: (input: any) => Promise<void> }>
   }>("app")
 
+  export const use = ctx.use
+
   const APP_JSON = "app.json"
 
   export type Input = {
     cwd: string
   }
 
-  export async function provide<T>(
-    input: Input,
-    cb: (app: App.Info) => Promise<T>,
-  ) {
+  export const provideExisting = ctx.provide
+  export async function provide<T>(input: Input, cb: (app: App.Info) => Promise<T>) {
     log.info("creating", {
       cwd: input.cwd,
     })
-    const git = await Filesystem.findUp(".git", input.cwd).then(([x]) =>
-      x ? path.dirname(x) : undefined,
-    )
+    const git = await Filesystem.findUp(".git", input.cwd).then(([x]) => (x ? path.dirname(x) : undefined))
     log.info("git", { git })
 
-    const data = path.join(
-      Global.Path.data,
-      "project",
-      git ? directory(git) : "global",
-    )
+    const data = path.join(Global.Path.data, "project", git ? directory(git) : "global")
     const stateFile = Bun.file(path.join(data, APP_JSON))
     const state = (await stateFile.json().catch(() => ({}))) as {
       initialized: number
@@ -96,13 +90,16 @@ export namespace App {
     }
 
     return ctx.provide(app, async () => {
-      const result = await cb(app.info)
-      for (const [key, entry] of app.services.entries()) {
-        if (!entry.shutdown) continue
-        log.info("shutdown", { name: key })
-        await entry.shutdown?.(await entry.state)
+      try {
+        const result = await cb(app.info)
+        return result
+      } finally {
+        for (const [key, entry] of app.services.entries()) {
+          if (!entry.shutdown) continue
+          log.info("shutdown", { name: key })
+          await entry.shutdown?.(await entry.state)
+        }
       }
-      return result
     })
   }
 

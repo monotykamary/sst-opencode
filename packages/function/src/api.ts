@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto"
 type Env = {
   SYNC_SERVER: DurableObjectNamespace<SyncServer>
   Bucket: R2Bucket
+  WEB_DOMAIN: string
 }
 
 export class SyncServer extends DurableObject<Env> {
@@ -35,13 +36,9 @@ export class SyncServer extends DurableObject<Env> {
     ws.close(code, "Durable Object is closing WebSocket")
   }
 
-  async publish(secret: string, key: string, content: any) {
-    if (secret !== (await this.getSecret())) throw new Error("Invalid secret")
+  async publish(key: string, content: any) {
     const sessionID = await this.getSessionID()
-    if (
-      !key.startsWith(`session/info/${sessionID}`) &&
-      !key.startsWith(`session/message/${sessionID}/`)
-    )
+    if (!key.startsWith(`session/info/${sessionID}`) && !key.startsWith(`session/message/${sessionID}/`))
       return new Response("Error: Invalid key", { status: 400 })
 
     // store message
@@ -76,6 +73,10 @@ export class SyncServer extends DurableObject<Env> {
       .map(([key, content]) => ({ key, content }))
   }
 
+  public async assertSecret(secret: string) {
+    if (secret !== (await this.getSecret())) throw new Error("Invalid secret")
+  }
+
   private async getSecret() {
     return this.ctx.storage.get<string>("secret")
   }
@@ -84,13 +85,17 @@ export class SyncServer extends DurableObject<Env> {
     return this.ctx.storage.get<string>("sessionID")
   }
 
-  async clear(secret: string) {
-    await this.assertSecret(secret)
+  async clear() {
+    const sessionID = await this.getSessionID()
+    const list = await this.env.Bucket.list({
+      prefix: `session/message/${sessionID}/`,
+      limit: 1000,
+    })
+    for (const item of list.objects) {
+      await this.env.Bucket.delete(item.key)
+    }
+    await this.env.Bucket.delete(`session/info/${sessionID}`)
     await this.ctx.storage.deleteAll()
-  }
-
-  private async assertSecret(secret: string) {
-    if (secret !== (await this.getSecret())) throw new Error("Invalid secret")
   }
 
   static shortName(id: string) {
@@ -120,7 +125,7 @@ export default {
       return new Response(
         JSON.stringify({
           secret,
-          url: "https://opencode.ai/s/" + short,
+          url: `https://${env.WEB_DOMAIN}/s/${short}`,
         }),
         {
           headers: { "Content-Type": "application/json" },
@@ -134,7 +139,17 @@ export default {
       const secret = body.secret
       const id = env.SYNC_SERVER.idFromName(SyncServer.shortName(sessionID))
       const stub = env.SYNC_SERVER.get(id)
-      await stub.clear(secret)
+      await stub.assertSecret(secret)
+      await stub.clear()
+      return new Response(JSON.stringify({}), {
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    if (request.method === "POST" && method === "share_delete_admin") {
+      const id = env.SYNC_SERVER.idFromName("oVF8Rsiv")
+      const stub = env.SYNC_SERVER.get(id)
+      await stub.clear()
       return new Response(JSON.stringify({}), {
         headers: { "Content-Type": "application/json" },
       })
@@ -150,7 +165,8 @@ export default {
       const name = SyncServer.shortName(body.sessionID)
       const id = env.SYNC_SERVER.idFromName(name)
       const stub = env.SYNC_SERVER.get(id)
-      await stub.publish(body.secret, body.key, body.content)
+      await stub.assertSecret(body.secret)
+      await stub.publish(body.key, body.content)
       return new Response(JSON.stringify({}), {
         headers: { "Content-Type": "application/json" },
       })
@@ -165,8 +181,7 @@ export default {
       }
       const id = url.searchParams.get("id")
       console.log("share_poll", id)
-      if (!id)
-        return new Response("Error: Share ID is required", { status: 400 })
+      if (!id) return new Response("Error: Share ID is required", { status: 400 })
       const stub = env.SYNC_SERVER.get(env.SYNC_SERVER.idFromName(id))
       return stub.fetch(request)
     }
@@ -174,8 +189,7 @@ export default {
     if (request.method === "GET" && method === "share_data") {
       const id = url.searchParams.get("id")
       console.log("share_data", id)
-      if (!id)
-        return new Response("Error: Share ID is required", { status: 400 })
+      if (!id) return new Response("Error: Share ID is required", { status: 400 })
       const stub = env.SYNC_SERVER.get(env.SYNC_SERVER.idFromName(id))
       const data = await stub.getData()
 
