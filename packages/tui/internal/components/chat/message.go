@@ -134,7 +134,6 @@ func renderContentBlock(
 	style := styles.NewStyle().
 		Foreground(renderer.textColor).
 		Background(t.BackgroundPanel()).
-		Width(width).
 		PaddingTop(renderer.paddingTop).
 		PaddingBottom(renderer.paddingBottom).
 		PaddingLeft(renderer.paddingLeft).
@@ -232,16 +231,15 @@ func renderText(
 	if highlight {
 		backgroundColor = t.BackgroundElement()
 	}
-	messageStyle := styles.NewStyle().Background(backgroundColor)
-	content := messageStyle.Render(text)
-
+	var content string
 	switch casted := message.(type) {
 	case opencode.AssistantMessage:
 		ts = time.UnixMilli(int64(casted.Time.Created))
 		content = util.ToMarkdown(text, width, backgroundColor)
 	case opencode.UserMessage:
 		ts = time.UnixMilli(int64(casted.Time.Created))
-		messageStyle = messageStyle.Width(width - 6)
+		messageStyle := styles.NewStyle().Background(backgroundColor).Width(width - 6)
+		content = messageStyle.Render(text)
 	}
 
 	timestamp := ts.
@@ -307,8 +305,10 @@ func renderToolDetails(
 		return ""
 	}
 
-	if toolCall.State.Status == opencode.ToolPartStateStatusPending || toolCall.State.Status == opencode.ToolPartStateStatusRunning {
+	if toolCall.State.Status == opencode.ToolPartStateStatusPending ||
+		toolCall.State.Status == opencode.ToolPartStateStatusRunning {
 		title := renderToolTitle(toolCall, width)
+		title = styles.NewStyle().Width(width - 6).Render(title)
 		return renderContentBlock(app, title, highlight, width)
 	}
 
@@ -423,9 +423,11 @@ func renderToolDetails(
 					case "completed":
 						body += fmt.Sprintf("- [x] %s\n", content)
 					case "cancelled":
-						body += fmt.Sprintf("- [~] %s\n", content)
-					// case "in-progress":
-					// 	body += fmt.Sprintf("- [ ] %s\n", content)
+						// strike through cancelled todo
+						body += fmt.Sprintf("- [~] ~~%s~~\n", content)
+					case "in_progress":
+						// highlight in progress todo
+						body += fmt.Sprintf("- [ ] `%s`\n", content)
 					default:
 						body += fmt.Sprintf("- [ ] %s\n", content)
 					}
@@ -457,6 +459,7 @@ func renderToolDetails(
 			}
 			body = *result
 			body = util.TruncateHeight(body, 10)
+			body = styles.NewStyle().Width(width - 6).Render(body)
 		}
 	}
 
@@ -467,6 +470,7 @@ func renderToolDetails(
 
 	if error != "" {
 		body = styles.NewStyle().
+			Width(width - 6).
 			Foreground(t.Error()).
 			Background(backgroundColor).
 			Render(error)
@@ -475,6 +479,7 @@ func renderToolDetails(
 	if body == "" && error == "" && result != nil {
 		body = *result
 		body = util.TruncateHeight(body, 10)
+		body = styles.NewStyle().Width(width - 6).Render(body)
 	}
 
 	title := renderToolTitle(toolCall, width)
@@ -486,8 +491,6 @@ func renderToolName(name string) string {
 	switch name {
 	case "webfetch":
 		return "Fetch"
-	case "todowrite", "todoread":
-		return "Plan"
 	default:
 		normalizedName := name
 		if after, ok := strings.CutPrefix(name, "opencode_"); ok {
@@ -495,6 +498,41 @@ func renderToolName(name string) string {
 		}
 		return cases.Title(language.Und).String(normalizedName)
 	}
+}
+
+func getTodoPhase(metadata map[string]any) string {
+	todos, ok := metadata["todos"].([]any)
+	if !ok || len(todos) == 0 {
+		return "Plan"
+	}
+
+	counts := map[string]int{"pending": 0, "completed": 0}
+	for _, item := range todos {
+		if todo, ok := item.(map[string]any); ok {
+			if status, ok := todo["status"].(string); ok {
+				counts[status]++
+			}
+		}
+	}
+
+	total := len(todos)
+	switch {
+	case counts["pending"] == total:
+		return "Creating plan"
+	case counts["completed"] == total:
+		return "Completing plan"
+	default:
+		return "Updating plan"
+	}
+}
+
+func getTodoTitle(toolCall opencode.ToolPart) string {
+	if toolCall.State.Status == opencode.ToolPartStateStatusCompleted {
+		if metadata, ok := toolCall.State.Metadata.(map[string]any); ok {
+			return getTodoPhase(metadata)
+		}
+	}
+	return "Plan"
 }
 
 func renderToolTitle(
@@ -544,8 +582,10 @@ func renderToolTitle(
 	case "webfetch":
 		toolArgs = renderArgs(&toolArgsMap, "url")
 		title = fmt.Sprintf("%s %s", title, toolArgs)
-	case "todowrite", "todoread":
-		// title is just the tool name
+	case "todowrite":
+		title = getTodoTitle(toolCall)
+	case "todoread":
+		return "Plan"
 	default:
 		toolName := renderToolName(toolCall.Tool)
 		title = fmt.Sprintf("%s %s", toolName, toolArgs)

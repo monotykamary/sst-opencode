@@ -11,6 +11,7 @@ import { App } from "../../app/app"
 import { MCP } from "../../mcp"
 import { Auth } from "../../auth"
 import { MessageV2 } from "../../session/message-v2"
+import { Mode } from "../../session/mode"
 
 type OutputFormat = "text" | "json" | "stream-json"
 
@@ -196,6 +197,10 @@ export const RunCommand = cmd({
         type: "boolean",
         default: false,
       })
+      .option("mode", {
+        type: "string",
+        describe: "mode to use",
+      })
   },
   handler: async (args) => {
     let message = args.message.join(" ")
@@ -249,7 +254,9 @@ export const RunCommand = cmd({
     await bootstrap({ cwd: process.cwd() }, async () => {
       const session = await (async () => {
         if (args.continue) {
-          const first = await Session.list().next()
+          const list = Session.list()
+          const first = await list.next()
+          await list.return()
           if (first.done) return
           return first.value
         }
@@ -359,10 +366,17 @@ export const RunCommand = cmd({
         UI.error(err)
       })
 
+      const mode = args.mode ? await Mode.get(args.mode) : await Mode.list().then((x) => x[0])
+
       const result = await Session.chat({
         sessionID: session.id,
-        providerID,
-        modelID,
+        ...(mode.model
+          ? mode.model
+          : {
+              providerID,
+              modelID,
+            }),
+        mode: mode.name,
         parts: [
           {
             type: "text",
