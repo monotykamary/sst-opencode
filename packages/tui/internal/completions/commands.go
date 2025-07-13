@@ -77,6 +77,7 @@ func (c *CommandCompletionProvider) GetChildEntries(
 	// Use fuzzy matching for commands
 	var commandNames []string
 	commandMap := make(map[string]dialog.CompletionItemI)
+	seenCommands := make(map[string]bool)
 
 	for _, cmd := range sorted {
 		if !cmd.HasTrigger() {
@@ -96,11 +97,16 @@ func (c *CommandCompletionProvider) GetChildEntries(
 	// Sort by score (best matches first)
 	sort.Sort(matches)
 
-	// Convert matches to completion items
+	// Convert matches to completion items, deduplicating by command name
 	items := []dialog.CompletionItemI{}
 	for _, match := range matches {
 		if item, ok := commandMap[match.Target]; ok {
-			items = append(items, item)
+			// Use the completion item value (command name) for deduplication
+			cmdName := item.GetValue()
+			if !seenCommands[cmdName] {
+				items = append(items, item)
+				seenCommands[cmdName] = true
+			}
 		}
 	}
 	return items, nil
