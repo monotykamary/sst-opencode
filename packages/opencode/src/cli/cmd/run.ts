@@ -12,6 +12,7 @@ import { MCP } from "../../mcp"
 import { Auth } from "../../auth"
 import { MessageV2 } from "../../session/message-v2"
 import { Mode } from "../../session/mode"
+import { Identifier } from "../../id/id"
 
 type OutputFormat = "text" | "json" | "stream-json"
 
@@ -282,9 +283,17 @@ export const RunCommand = cmd({
         UI.empty()
 
         const cfg = await Config.get()
-        if (cfg.autoshare || Flag.OPENCODE_AUTO_SHARE || args.share) {
-          await Session.share(session.id)
-          UI.println(UI.Style.TEXT_INFO_BOLD + "~  https://opencode.ai/s/" + session.id.slice(-8))
+        if (cfg.share === "auto" || Flag.OPENCODE_AUTO_SHARE || args.share) {
+          try {
+            await Session.share(session.id)
+            UI.println(UI.Style.TEXT_INFO_BOLD + "~  https://opencode.ai/s/" + session.id.slice(-8))
+          } catch (error) {
+            if (error instanceof Error && error.message.includes("disabled")) {
+              UI.println(UI.Style.TEXT_DANGER_BOLD + "!  " + error.message)
+            } else {
+              throw error
+            }
+          }
         }
         UI.empty()
       }
@@ -326,9 +335,11 @@ export const RunCommand = cmd({
         )
       }
 
+      let text = ""
       if (!printMode) {
         Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
-          if (evt.properties.sessionID !== session.id) return
+          if (evt.properties.part.sessionID !== session.id) return
+          if (evt.properties.part.messageID === messageID) return
           const part = evt.properties.part
 
           if (part.type === "tool" && part.state.status === "completed") {
@@ -337,13 +348,15 @@ export const RunCommand = cmd({
           }
 
           if (part.type === "text") {
-            if (part.text.includes("\n")) {
+            text = part.text
+
+            if (part.time?.end) {
               UI.empty()
-              UI.println(part.text)
+              UI.println(UI.markdown(text))
               UI.empty()
+              text = ""
               return
             }
-            printEvent(UI.Style.TEXT_NORMAL_BOLD, "Text", part.text)
           }
         })
       }
@@ -368,8 +381,10 @@ export const RunCommand = cmd({
 
       const mode = args.mode ? await Mode.get(args.mode) : await Mode.list().then((x) => x[0])
 
+      const messageID = Identifier.ascending("message")
       const result = await Session.chat({
         sessionID: session.id,
+        messageID,
         ...(mode.model
           ? mode.model
           : {
@@ -379,6 +394,9 @@ export const RunCommand = cmd({
         mode: mode.name,
         parts: [
           {
+            id: Identifier.ascending("part"),
+            sessionID: session.id,
+            messageID: messageID,
             type: "text",
             text: message,
           },
@@ -485,7 +503,7 @@ export const RunCommand = cmd({
       } else {
         if (isPiped) {
           const match = result.parts.findLast((x) => x.type === "text")
-          if (match) process.stdout.write(match.text)
+          if (match) process.stdout.write(UI.markdown(match.text))
           if (errorMsg) process.stdout.write(errorMsg)
         }
         UI.empty()
