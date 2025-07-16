@@ -1,0 +1,29 @@
+name: publish-github-action
+
+on:
+  workflow_dispatch:
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - run: git fetch --force --tags
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.17
+
+      - name: Publish
+        run: |
+          git config --global user.email "opencode@sst.dev"
+          git config --global user.name "opencode"
+          ./scripts/publish-github-action.ts

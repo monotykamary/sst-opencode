@@ -17,6 +17,7 @@ import {
 
 import PROMPT_INITIALIZE from "../session/prompt/initialize.txt"
 import PROMPT_PLAN from "../session/prompt/plan.txt"
+import PROMPT_ANTHROPIC_SPOOF from "../session/prompt/anthropic_spoof.txt"
 
 import { App } from "../app/app"
 import { Bus } from "../bus"
@@ -504,6 +505,7 @@ export namespace Session {
       })
 
     if (msgs.length === 0 && !session.parentID) {
+      const small = (await Provider.getSmallModel(input.providerID)) ?? model
       generateText({
         maxOutputTokens: input.providerID === "google" ? 1024 : 20,
         providerOptions: model.info.options,
@@ -528,7 +530,7 @@ export namespace Session {
             },
           ]),
         ],
-        model: model.language,
+        model: small.language,
       })
         .then((result) => {
           if (result.text)
@@ -545,7 +547,8 @@ export namespace Session {
     msgs.push({ info: userMsg, parts: userParts })
 
     const mode = await Mode.get(input.mode ?? "build")
-    let system = mode.prompt ? [mode.prompt] : SystemPrompt.provider(input.providerID, input.modelID)
+    let system = input.providerID === "anthropic" ? [PROMPT_ANTHROPIC_SPOOF.trim()] : []
+    system.push(...(mode.prompt ? [mode.prompt] : SystemPrompt.provider(input.modelID)))
     system.push(...(await SystemPrompt.environment()))
     system.push(...(await SystemPrompt.custom()))
     // max 2 system prompt messages for caching purposes
@@ -1012,6 +1015,7 @@ export namespace Session {
 
     const processor = createProcessor(next, model.info)
     const stream = streamText({
+      maxRetries: 10,
       abortSignal: abort.signal,
       model: model.language,
       messages: [
