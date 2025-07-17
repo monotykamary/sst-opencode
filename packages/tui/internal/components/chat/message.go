@@ -196,7 +196,11 @@ func renderText(
 	case opencode.UserMessage:
 		ts = time.UnixMilli(int64(casted.Time.Created))
 		base := styles.NewStyle().Foreground(t.Text()).Background(backgroundColor)
-		words := strings.Fields(text)
+		// Apply non-breaking hyphens to prevent sparse breaks
+		textWithHyphens := strings.ReplaceAll(text, "-", "2011")
+		
+		// Process @ mentions and styling
+		words := strings.Fields(textWithHyphens)
 		for i, word := range words {
 			if strings.HasPrefix(word, "@") {
 				words[i] = base.Foreground(t.Secondary()).Render(word + " ")
@@ -204,9 +208,14 @@ func renderText(
 				words[i] = base.Render(word + " ")
 			}
 		}
-		text = strings.Join(words, "")
-		text = ansi.WordwrapWc(text, width-6, " -")
-		content = base.Width(width - 6).Render(text)
+		styledText := strings.Join(words, "")
+		
+		// Apply word wrapping
+		wrappedText := ansi.WordwrapWc(styledText, width-6, " ")
+		
+		// Restore regular hyphens
+		finalText := strings.ReplaceAll(wrappedText, "2011", "-")
+		content = base.Width(width - 6).Render(finalText)
 	}
 
 	timestamp := ts.
