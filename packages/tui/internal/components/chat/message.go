@@ -197,8 +197,8 @@ func renderText(
 		ts = time.UnixMilli(int64(casted.Time.Created))
 		base := styles.NewStyle().Foreground(t.Text()).Background(backgroundColor)
 		// Apply non-breaking hyphens to prevent sparse breaks
-		textWithHyphens := strings.ReplaceAll(text, "-", "2011")
-		
+		textWithHyphens := strings.ReplaceAll(text, "-", "\u2011")
+
 		// Process @ mentions and styling
 		words := strings.Fields(textWithHyphens)
 		for i, word := range words {
@@ -209,12 +209,12 @@ func renderText(
 			}
 		}
 		styledText := strings.Join(words, "")
-		
+
 		// Apply word wrapping
 		wrappedText := ansi.WordwrapWc(styledText, width-6, " ")
-		
+
 		// Restore regular hyphens
-		finalText := strings.ReplaceAll(wrappedText, "2011", "-")
+		finalText := strings.ReplaceAll(wrappedText, "\u2011", "-")
 		content = base.Width(width - 6).Render(finalText)
 	}
 
@@ -716,5 +716,4 @@ func renderDiagnostics(
 	// if !ok {
 	// 	return ""
 	// }
-
 }
