@@ -83,22 +83,15 @@ func Extension(path string) string {
 }
 
 func ToMarkdown(content string, width int, backgroundColor compat.AdaptiveColor) string {
-	// Use precise width calculation to maintain 86 constraint
-	renderWidth := width - 6 // Account for padding and borders
-	if renderWidth < 10 {
-		renderWidth = 10
-	}
+	renderWidth := width - GetMarkdownContainerFrame()
 	r := styles.GetMarkdownRenderer(renderWidth, backgroundColor)
 	content = strings.ReplaceAll(content, RootPath+"/", "")
 
-	// Smart hyphen handling: use non-breaking hyphens for short hyphenated words
-	// This prevents sparse single-word lines while preserving readability
-	content = strings.ReplaceAll(content, "-", "\u2011") // Non-breaking hyphen
-
-	rendered, _ := r.Render(content)
-
-	// Restore regular hyphens
-	rendered = strings.ReplaceAll(rendered, "\u2011", "-")
+	// Apply hyphen preservation during markdown rendering
+	rendered := ProcessTextWithHyphens(content, func(t string) string {
+		result, _ := r.Render(t)
+		return result
+	})
 	lines := strings.Split(rendered, "\n")
 	// Clean up empty lines at start/end
 	if len(lines) > 0 {

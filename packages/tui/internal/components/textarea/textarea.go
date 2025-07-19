@@ -2051,7 +2051,7 @@ func wrapInterfaces(content []any, width int) [][]any {
 			if unicode.IsSpace(r) {
 				isSpace = true
 			}
-			// Treat hyphens as part of words to prevent sparse breaks
+			// Use hyphen-aware word boundary detection
 			if r == '-' {
 				isSpace = false
 			}
