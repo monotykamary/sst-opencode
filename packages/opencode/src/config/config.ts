@@ -31,9 +31,6 @@ export namespace Config {
       const os = await import("os")
       result.username = os.userInfo().username
     }
-    if (!result.layout) {
-      result.layout = "auto"
-    }
 
     log.info("loaded", result)
 
@@ -152,6 +149,12 @@ export namespace Config {
       autoupdate: z.boolean().optional().describe("Automatically update to the latest version"),
       disabled_providers: z.array(z.string()).optional().describe("Disable providers that are loaded automatically"),
       model: z.string().describe("Model to use in the format of provider/model, eg anthropic/claude-2").optional(),
+      small_model: z
+        .string()
+        .describe(
+          "Small model to use for tasks like summarization and title generation in the format of provider/model",
+        )
+        .optional(),
       username: z
         .string()
         .optional()
@@ -176,7 +179,7 @@ export namespace Config {
         .describe("Custom provider configurations and model overrides"),
       mcp: z.record(z.string(), Mcp).optional().describe("MCP (Model Context Protocol) server configurations"),
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
-      layout: Layout.optional().describe("Layout to use for the TUI"),
+      layout: Layout.optional().describe("@deprecated Always uses stretch layout."),
       experimental: z
         .object({
           hook: z
