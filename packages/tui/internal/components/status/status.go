@@ -1,6 +1,7 @@
 package status
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -120,13 +121,26 @@ func (m statusComponent) View() string {
 		Render(key+" ") +
 		mode
 
+	// Add queue information
+	queueInfo := ""
+	if m.app.QueueManager != nil {
+		count, _ := m.app.QueueManager.GetQueueInfo()
+		if count > 0 {
+			queueStyle := styles.NewStyle().
+				Background(t.BackgroundPanel()).
+				Foreground(t.Accent()).
+				Render(fmt.Sprintf(" [%d queued]", count))
+			queueInfo = queueStyle
+		}
+	}
+
 	space := max(
 		0,
-		m.width-lipgloss.Width(logo)-lipgloss.Width(cwd)-lipgloss.Width(mode),
+		m.width-lipgloss.Width(logo)-lipgloss.Width(cwd)-lipgloss.Width(mode)-lipgloss.Width(queueInfo),
 	)
 	spacer := styles.NewStyle().Background(t.BackgroundPanel()).Width(space).Render("")
 
-	status := logo + cwd + spacer + mode
+	status := logo + cwd + queueInfo + spacer + mode
 
 	blank := styles.NewStyle().Background(t.Background()).Width(m.width).Render("")
 	return blank + "\n" + status

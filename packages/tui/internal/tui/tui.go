@@ -27,6 +27,7 @@ import (
 	"github.com/sst/opencode/internal/components/toast"
 	"github.com/sst/opencode/internal/config"
 	"github.com/sst/opencode/internal/layout"
+	"github.com/sst/opencode/internal/queue"
 	"github.com/sst/opencode/internal/styles"
 	"github.com/sst/opencode/internal/theme"
 	"github.com/sst/opencode/internal/util"
@@ -76,6 +77,7 @@ type appModel struct {
 	exitKeyState      ExitKeyState
 	messagesRight     bool
 	fileViewer        fileviewer.Model
+	injectionMgr      *queue.InjectionManager
 }
 
 func (a appModel) Init() tea.Cmd {
@@ -333,8 +335,21 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, toast.NewErrorToast(msg.Error())
 	case app.SendMsg:
 		a.showCompletionDialog = false
-		a.app, cmd = a.app.SendChatMessage(context.Background(), msg.Text, msg.Attachments)
-		cmds = append(cmds, cmd)
+		if a.app.QueueManager != nil {
+			// Use queue for message handling
+			a.app.QueueManager.Enqueue(msg.Text, msg.Attachments)
+			// Process queue immediately if not busy
+			if !a.app.IsBusy() {
+				cmd := a.app.QueueManager.ProcessQueueWithInjection(context.Background())
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+		} else {
+			// Fallback to direct sending
+			a.app, cmd = a.app.SendChatMessage(context.Background(), msg.Text, msg.Attachments)
+			cmds = append(cmds, cmd)
+		}
 	case app.SetEditorContentMsg:
 		// Set the editor content without sending
 		a.editor.SetValueWithAttachments(msg.Text)
@@ -396,6 +411,13 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.app.Messages[messageIndex] = message
 			}
 		}
+
+		// Check for injection opportunities during tool execution
+		if a.injectionMgr != nil {
+			if injectCmd := a.injectionMgr.HandleEvent(msg); injectCmd != nil {
+				cmds = append(cmds, injectCmd)
+			}
+		}
 	case opencode.EventListResponseEventMessageUpdated:
 		if msg.Properties.Info.SessionID == a.app.Session.ID {
 			matchIndex := slices.IndexFunc(a.app.Messages, func(m app.Message) bool {
@@ -421,6 +443,13 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Info:  msg.Properties.Info.AsUnion(),
 					Parts: []opencode.PartUnion{},
 				})
+			}
+		}
+
+		// Check for injection opportunities during message updates
+		if a.injectionMgr != nil {
+			if injectCmd := a.injectionMgr.HandleEvent(msg); injectCmd != nil {
+				cmds = append(cmds, injectCmd)
 			}
 		}
 	case opencode.EventListResponseEventSessionError:
@@ -1043,6 +1072,11 @@ func NewModel(app *app.App) tea.Model {
 		exitKeyState:         ExitKeyIdle,
 		fileViewer:           fileviewer.New(app),
 		messagesRight:        app.State.MessagesRight,
+	}
+
+	// Initialize injection manager if queue is available
+	if app.QueueManager != nil {
+		model.injectionMgr = queue.NewInjectionManager(app.QueueManager, context.Background())
 	}
 
 	return model

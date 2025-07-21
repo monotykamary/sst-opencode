@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
@@ -234,6 +235,57 @@ func (m *messagesComponent) renderView() tea.Cmd {
 		partCount := 0
 		lineCount := 0
 
+		// Add queued messages display
+		if m.app.QueueManager != nil {
+			queuedMessages := m.app.QueueManager.GetQueuedMessages()
+			if len(queuedMessages) > 0 {
+				queuedStyle := styles.NewStyle().
+					Background(t.BackgroundElement()).
+					Foreground(t.Accent()).
+					Padding(0, 1)
+
+				// Summary line
+				summaryText := fmt.Sprintf("📋 %d message%s queued",
+					len(queuedMessages),
+					map[bool]string{true: "s", false: ""}[len(queuedMessages) > 1])
+
+				summaryBlock := queuedStyle.Render(summaryText)
+				blocks = append(blocks, summaryBlock)
+				lineCount += lipgloss.Height(summaryBlock) + 1
+
+				// Individual messages
+				for i, msg := range queuedMessages {
+					msgStyle := styles.NewStyle().
+						Background(t.BackgroundElement()).
+						Foreground(t.TextMuted()).
+						Padding(0, 2)
+
+					prefix := fmt.Sprintf("  %d. ", i+1)
+					if msg.Consolidated {
+						prefix = "  📎 "
+					}
+
+					// Truncate long messages
+					text := msg.Text
+					if len(text) > 80 {
+						text = text[:77] + "..."
+					}
+
+					msgText := prefix + text
+					msgBlock := msgStyle.Render(msgText)
+					blocks = append(blocks, msgBlock)
+					lineCount += lipgloss.Height(msgBlock) + 1
+				}
+
+				// Add separator
+				separator := styles.NewStyle().
+					Foreground(t.TextMuted()).
+					Background(t.Background()).
+					Render("─" + strings.Repeat("─", 50))
+				blocks = append(blocks, separator)
+				lineCount += lipgloss.Height(separator) + 1
+			}
+		}
 		orphanedToolCalls := make([]opencode.ToolPart, 0)
 
 		width := m.width // always use full width
@@ -537,6 +589,16 @@ func (m *messagesComponent) renderView() tea.Cmd {
 	}
 }
 
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%.0fs", d.Seconds())
+	} else if d < time.Hour {
+		return fmt.Sprintf("%.0fm", d.Minutes())
+	} else {
+		return fmt.Sprintf("%.1fh", d.Hours())
+	}
+}
+
 func (m *messagesComponent) renderHeader() string {
 	if m.app.Session.ID == "" {
 		return ""
@@ -580,8 +642,20 @@ func (m *messagesComponent) renderHeader() string {
 		Background(t.Background()).
 		Render(formatTokensAndCost(tokens, contextWindow, cost, isSubscriptionModel))
 
+	// Add queued messages display
+	queueInfo := ""
+	if m.app.QueueManager != nil {
+		count, _ := m.app.QueueManager.GetQueueInfo()
+		if count > 0 {
+			queueInfo = styles.NewStyle().
+				Foreground(t.Accent()).
+				Background(t.Background()).
+				Render(fmt.Sprintf("📋 %d queued", count))
+		}
+	}
+
 	shareEnabled := m.app.Config.Share != opencode.ConfigShareDisabled
-	headerText := util.ToMarkdown("# "+m.app.Session.Title, headerWidth-len(sessionInfo), t.Background())
+	headerText := util.ToMarkdown("# "+m.app.Session.Title, headerWidth-len(sessionInfo)-len(queueInfo), t.Background())
 
 	var items []layout.FlexItem
 	if shareEnabled {
@@ -589,9 +663,17 @@ func (m *messagesComponent) renderHeader() string {
 		if m.app.Session.Share.URL != "" {
 			share = muted(m.app.Session.Share.URL + "  /unshare")
 		}
-		items = []layout.FlexItem{{View: share}, {View: sessionInfo}}
+		items = []layout.FlexItem{{View: share}}
+		if queueInfo != "" {
+			items = append(items, layout.FlexItem{View: queueInfo})
+		}
+		items = append(items, layout.FlexItem{View: sessionInfo})
 	} else {
-		items = []layout.FlexItem{{View: headerText}, {View: sessionInfo}}
+		items = []layout.FlexItem{{View: headerText}}
+		if queueInfo != "" {
+			items = append(items, layout.FlexItem{View: queueInfo})
+		}
+		items = append(items, layout.FlexItem{View: sessionInfo})
 	}
 
 	background := t.Background()

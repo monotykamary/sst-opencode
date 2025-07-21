@@ -17,6 +17,8 @@ import (
 	"github.com/sst/opencode/internal/components/toast"
 	"github.com/sst/opencode/internal/config"
 	"github.com/sst/opencode/internal/id"
+	"github.com/sst/opencode/internal/queue"
+
 	"github.com/sst/opencode/internal/styles"
 	"github.com/sst/opencode/internal/theme"
 	"github.com/sst/opencode/internal/util"
@@ -48,6 +50,7 @@ type App struct {
 	IntitialMode     *string
 	compactCancel    context.CancelFunc
 	IsLeaderSequence bool
+	QueueManager     *queue.Manager
 }
 
 type SessionCreatedMsg = struct {
@@ -170,6 +173,9 @@ func New(
 		InitialPrompt: initialPrompt,
 		IntitialMode:  initialMode,
 	}
+
+	// Initialize queue manager with adapter
+	app.QueueManager = queue.NewManager(&queueAdapter{app: app})
 
 	return app, nil
 }
