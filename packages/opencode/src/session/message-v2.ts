@@ -510,57 +510,62 @@ export namespace MessageV2 {
       }
 
       if (msg.info.role === "assistant") {
+        const parts: UIMessage["parts"] = []
+        let pendingReasoning: { type: "reasoning"; text: string } | undefined
+        for (const part of msg.parts) {
+          if (part.type === "reasoning") {
+            pendingReasoning = {
+              type: "reasoning",
+              text: part.text,
+            }
+            continue
+          }
+          if (part.type === "text") {
+            if (pendingReasoning) {
+              parts.push(pendingReasoning)
+              pendingReasoning = undefined
+            }
+            parts.push({
+              type: "text",
+              text: part.text,
+            })
+            continue
+          }
+          // Any non-text content breaks required adjacency; drop pending reasoning
+          pendingReasoning = undefined
+          if (part.type === "step-start") {
+            parts.push({ type: "step-start" })
+            continue
+          }
+          if (part.type === "tool") {
+            if (part.state.status === "completed") {
+              parts.push({
+                type: ("tool-" + part.tool) as `tool-${string}`,
+                state: "output-available",
+                toolCallId: part.callID,
+                input: part.state.input,
+                output: part.state.time.compacted ? "[Old tool result content cleared]" : part.state.output,
+              })
+              continue
+            }
+            if (part.state.status === "error") {
+              parts.push({
+                type: ("tool-" + part.tool) as `tool-${string}`,
+                state: "output-error",
+                toolCallId: part.callID,
+                input: part.state.input,
+                errorText: part.state.error,
+              })
+              continue
+            }
+          }
+        }
+        // Do not leave trailing reasoning without a following text part
+        pendingReasoning = undefined
         result.push({
           id: msg.info.id,
           role: "assistant",
-          parts: msg.parts.flatMap((part): UIMessage["parts"] => {
-            if (part.type === "text")
-              return [
-                {
-                  type: "text",
-                  text: part.text,
-                },
-              ]
-            if (part.type === "step-start")
-              return [
-                {
-                  type: "step-start",
-                },
-              ]
-            if (part.type === "tool") {
-              if (part.state.status === "completed")
-                return [
-                  {
-                    type: ("tool-" + part.tool) as `tool-${string}`,
-                    state: "output-available",
-                    toolCallId: part.callID,
-                    input: part.state.input,
-                    output: part.state.time.compacted ? "[Old tool result content cleared]" : part.state.output,
-                  },
-                ]
-              if (part.state.status === "error")
-                return [
-                  {
-                    type: ("tool-" + part.tool) as `tool-${string}`,
-                    state: "output-error",
-                    toolCallId: part.callID,
-                    input: part.state.input,
-                    errorText: part.state.error,
-                  },
-                ]
-            }
-            if (part.type === "reasoning") {
-              return [
-                {
-                  type: "reasoning",
-                  text: part.text,
-                  providerMetadata: part.metadata,
-                },
-              ]
-            }
-
-            return []
-          }),
+          parts,
         })
       }
     }
