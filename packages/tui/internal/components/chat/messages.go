@@ -904,8 +904,10 @@ func (m *messagesComponent) renderHeader() string {
 	}
 
 	// Check if current model is a subscription model (cost is 0 for both input and output)
-	isSubscriptionModel := m.app.Model != nil &&
-		m.app.Model.Cost.Input == 0 && m.app.Model.Cost.Output == 0
+	isSubscriptionModel := false
+	if m.app.Model != nil && m.app.Model.Cost != nil {
+		isSubscriptionModel = m.app.Model.Cost.Input == 0 && m.app.Model.Cost.Output == 0
+	}
 
 	sessionInfoText := formatTokensAndCost(tokens, contextWindow, cost, isSubscriptionModel)
 	sessionInfo = styles.NewStyle().

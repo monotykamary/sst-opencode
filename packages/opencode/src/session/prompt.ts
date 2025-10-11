@@ -162,6 +162,13 @@ export namespace SessionPrompt {
 
     using abort = lock(input.sessionID)
 
+    await handleUnsupportedAttachments({
+      message: userMsg,
+      modalities: model.info.modalities,
+      modelID: model.modelID,
+      providerID: model.providerID,
+    })
+
     const system = await resolveSystemPrompt({
       providerID: model.providerID,
       modelID: model.info.id,
@@ -216,6 +223,7 @@ export namespace SessionPrompt {
           providerID: model.providerID,
         }),
         (messages) => insertReminders({ messages, agent }),
+        (messages) => sanitizeMessages(messages, model.info.modalities),
       )
       if (step === 0)
         ensureTitle({
@@ -546,6 +554,62 @@ export namespace SessionPrompt {
       tools[key] = item
     }
     return tools
+  }
+
+  function modalityFromMime(mime: string) {
+    if (mime.startsWith("image/")) return "image"
+    if (mime.startsWith("audio/")) return "audio"
+    if (mime.startsWith("video/")) return "video"
+    if (mime === "application/pdf") return "pdf"
+    return undefined
+  }
+
+  function acceptsFile(modalities: ModelsDev.Model["modalities"], mime: string) {
+    if (mime === "text/plain") return true
+    if (mime === "application/x-directory") return true
+    const kind = modalityFromMime(mime)
+    if (!kind) return true
+    return modalities.input.includes(kind)
+  }
+
+  async function handleUnsupportedAttachments(input: {
+    message: MessageV2.WithParts
+    modalities: ModelsDev.Model["modalities"]
+    providerID: string
+    modelID: string
+  }) {
+    const skip = input.message.parts.filter(
+      (part): part is MessageV2.FilePart => part.type === "file" && !acceptsFile(input.modalities, part.mime),
+    )
+    if (skip.length === 0) return
+    const kinds = Array.from(new Set(skip.map((part) => modalityFromMime(part.mime) ?? "file")))
+    const label = kinds.join(", ")
+    const count = skip.length
+    const part: MessageV2.TextPart = {
+      id: Identifier.ascending("part"),
+      messageID: input.message.info.id,
+      sessionID: input.message.info.sessionID,
+      type: "text",
+      synthetic: true,
+      text: `Skipped ${count} attachment${count === 1 ? "" : "s"} (${label}) because ${input.providerID}/${input.modelID} does not accept those inputs.`,
+    }
+    input.message.parts.push(part)
+    await Session.updatePart(part)
+  }
+
+  function sanitizeMessages(messages: MessageV2.WithParts[], modalities: ModelsDev.Model["modalities"]) {
+    return messages.map((msg) => {
+      if (msg.info.role !== "user") return msg
+      const parts = msg.parts.filter((part) => {
+        if (part.type !== "file") return true
+        return acceptsFile(modalities, part.mime)
+      })
+      if (parts.length === msg.parts.length) return msg
+      return {
+        ...msg,
+        parts,
+      }
+    })
   }
 
   async function createUserMessage(input: PromptInput) {

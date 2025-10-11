@@ -239,52 +239,64 @@ export namespace Provider {
       const existing = database[providerID]
       const parsed: ModelsDev.Provider = {
         id: providerID,
-        npm: provider.npm ?? existing?.npm,
+        npm: provider.npm ?? existing?.npm ?? "",
         name: provider.name ?? existing?.name ?? providerID,
         env: provider.env ?? existing?.env ?? [],
         api: provider.api ?? existing?.api,
+        doc: provider.doc ?? existing?.doc ?? "https://opencode.ai",
         models: existing?.models ?? {},
+        options: provider.options ?? existing?.options,
       }
 
       for (const [modelID, model] of Object.entries(provider.models ?? {})) {
-        const existing = parsed.models[modelID]
+        const existingModel = parsed.models[modelID]
+        const baseModalities =
+          model.modalities ??
+          existingModel?.modalities ?? {
+            input: ["text"],
+            output: ["text"],
+          }
         const parsedModel: ModelsDev.Model = {
-          id: model.id ?? modelID,
-          name: model.name ?? existing?.name ?? modelID,
-          release_date: model.release_date ?? existing?.release_date,
-          attachment: model.attachment ?? existing?.attachment ?? false,
-          reasoning: model.reasoning ?? existing?.reasoning ?? false,
-          temperature: model.temperature ?? existing?.temperature ?? false,
-          tool_call: model.tool_call ?? existing?.tool_call ?? true,
+          id: modelID,
+          name: model.name ?? existingModel?.name ?? modelID,
+          attachment: model.attachment ?? existingModel?.attachment ?? false,
+          reasoning: model.reasoning ?? existingModel?.reasoning ?? false,
+          temperature: model.temperature ?? existingModel?.temperature ?? false,
+          tool_call: model.tool_call ?? existingModel?.tool_call ?? true,
+          knowledge: model.knowledge ?? existingModel?.knowledge,
+          release_date: model.release_date ?? existingModel?.release_date ?? "1970-01",
+          last_updated:
+            model.last_updated ??
+            existingModel?.last_updated ??
+            model.release_date ??
+            existingModel?.release_date ??
+            "1970-01",
+          modalities: baseModalities,
+          open_weights: model.open_weights ?? existingModel?.open_weights ?? false,
           cost:
-            !model.cost && !existing?.cost
+            !model.cost && !existingModel?.cost
               ? {
                   input: 0,
                   output: 0,
-                  cache_read: 0,
-                  cache_write: 0,
                 }
               : {
-                  cache_read: 0,
-                  cache_write: 0,
-                  ...existing?.cost,
+                  ...existingModel?.cost,
                   ...model.cost,
                 },
-          options: {
-            ...existing?.options,
-            ...model.options,
-          },
-          limit: model.limit ??
-            existing?.limit ?? {
+          limit:
+            model.limit ??
+            existingModel?.limit ?? {
               context: 0,
               output: 0,
             },
-          modalities: model.modalities ??
-            existing?.modalities ?? {
-              input: ["text"],
-              output: ["text"],
-            },
-          provider: model.provider ?? existing?.provider,
+          alpha: model.alpha ?? existingModel?.alpha,
+          beta: model.beta ?? existingModel?.beta,
+          experimental: model.experimental ?? existingModel?.experimental,
+          options: {
+            ...existingModel?.options,
+            ...model.options,
+          },
+          provider: model.provider ?? existingModel?.provider,
         }
         parsed.models[modelID] = parsedModel
       }

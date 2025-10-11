@@ -398,16 +398,26 @@ export type Config = {
         [key: string]: {
           id?: string
           name?: string
+          knowledge?: string
           release_date?: string
+          last_updated?: string
           attachment?: boolean
           reasoning?: boolean
           temperature?: boolean
           tool_call?: boolean
+          open_weights?: boolean
+          modalities?: {
+            input: Array<"text" | "audio" | "image" | "video" | "pdf">
+            output: Array<"text" | "audio" | "image" | "video" | "pdf">
+          }
           cost?: {
-            input: number
-            output: number
+            input?: number
+            output?: number
             cache_read?: number
             cache_write?: number
+            reasoning?: number
+            input_audio?: number
+            output_audio?: number
           }
           limit?: {
             context: number
@@ -418,11 +428,14 @@ export type Config = {
             output: Array<"text" | "audio" | "image" | "video" | "pdf">
           }
           experimental?: boolean
+          alpha?: boolean
+          beta?: boolean
           options?: {
             [key: string]: unknown
           }
           provider?: {
-            npm: string
+            npm?: string
+            api?: string
           }
         }
       }
@@ -894,16 +907,26 @@ export type Command = {
 export type Model = {
   id: string
   name: string
+  knowledge?: string
   release_date: string
+  last_updated: string
   attachment: boolean
   reasoning: boolean
   temperature: boolean
   tool_call: boolean
-  cost: {
-    input: number
-    output: number
+  open_weights: boolean
+  modalities: {
+    input: Array<"text" | "audio" | "image" | "video" | "pdf">
+    output: Array<"text" | "audio" | "image" | "video" | "pdf">
+  }
+  cost?: {
+    input?: number
+    output?: number
     cache_read?: number
     cache_write?: number
+    reasoning?: number
+    input_audio?: number
+    output_audio?: number
   }
   limit: {
     context: number
@@ -914,11 +937,14 @@ export type Model = {
     output: Array<"text" | "audio" | "image" | "video" | "pdf">
   }
   experimental?: boolean
-  options: {
+  alpha?: boolean
+  beta?: boolean
+  options?: {
     [key: string]: unknown
   }
   provider?: {
-    npm: string
+    npm?: string
+    api?: string
   }
 }
 
@@ -927,9 +953,13 @@ export type Provider = {
   name: string
   env: Array<string>
   id: string
-  npm?: string
+  npm: string
+  doc: string
   models: {
     [key: string]: Model
+  }
+  options?: {
+    [key: string]: unknown
   }
 }
 

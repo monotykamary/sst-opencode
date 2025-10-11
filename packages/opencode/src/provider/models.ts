@@ -9,35 +9,56 @@ export namespace ModelsDev {
   const log = Log.create({ service: "models.dev" })
   const filepath = path.join(Global.Path.cache, "models.json")
 
+  const isoDate = z
+    .string()
+    .regex(/^\d{4}-\d{2}(-\d{2})?$/, {
+      message: "Must be in YYYY-MM or YYYY-MM-DD format",
+    })
+
   export const Model = z
     .object({
       id: z.string(),
-      name: z.string(),
-      release_date: z.string(),
+      name: z.string().min(1, "Model name cannot be empty"),
       attachment: z.boolean(),
       reasoning: z.boolean(),
       temperature: z.boolean(),
       tool_call: z.boolean(),
-      cost: z.object({
-        input: z.number(),
-        output: z.number(),
-        cache_read: z.number().optional(),
-        cache_write: z.number().optional(),
+      knowledge: isoDate.optional(),
+      release_date: isoDate,
+      last_updated: isoDate,
+      modalities: z.object({
+        input: z.array(z.enum(["text", "audio", "image", "video", "pdf"])),
+        output: z.array(z.enum(["text", "audio", "image", "video", "pdf"])),
       }),
-      limit: z.object({
-        context: z.number(),
-        output: z.number(),
-      }),
-      modalities: z
+      open_weights: z.boolean(),
+      cost: z
         .object({
-          input: z.array(z.enum(["text", "audio", "image", "video", "pdf"])),
-          output: z.array(z.enum(["text", "audio", "image", "video", "pdf"])),
+          input: z.number().min(0, "Input price cannot be negative"),
+          output: z.number().min(0, "Output price cannot be negative"),
+          reasoning: z.number().min(0, "Reasoning price cannot be negative").optional(),
+          cache_read: z.number().min(0, "Cache read price cannot be negative").optional(),
+          cache_write: z.number().min(0, "Cache write price cannot be negative").optional(),
+          input_audio: z.number().min(0, "Audio input price cannot be negative").optional(),
+          output_audio: z.number().min(0, "Audio output price cannot be negative").optional(),
         })
         .optional(),
+      limit: z.object({
+        context: z.number().min(0, "Context window must be positive"),
+        output: z.number().min(0, "Output tokens must be positive"),
+      }),
+      alpha: z.boolean().optional(),
+      beta: z.boolean().optional(),
       experimental: z.boolean().optional(),
-      options: z.record(z.string(), z.any()),
-      provider: z.object({ npm: z.string() }).optional(),
+      options: z.record(z.string(), z.any()).optional(),
+      provider: z.object({ npm: z.string().optional(), api: z.string().optional() }).optional(),
     })
+    .refine(
+      (data) => !(data.reasoning === false && data.cost?.reasoning !== undefined),
+      {
+        message: "Cannot set cost.reasoning when reasoning is false",
+        path: ["cost", "reasoning"],
+      },
+    )
     .meta({
       ref: "Model",
     })
@@ -45,13 +66,26 @@ export namespace ModelsDev {
 
   export const Provider = z
     .object({
-      api: z.string().optional(),
-      name: z.string(),
-      env: z.array(z.string()),
+      api: z
+        .string()
+        .optional(),
+      name: z.string().min(1, "Provider name cannot be empty"),
+      env: z.array(z.string()).min(1, "Provider env cannot be empty"),
       id: z.string(),
-      npm: z.string().optional(),
+      npm: z.string().min(1, "Provider npm module cannot be empty"),
+      doc: z.string().min(1, "Please provide provider documentation link"),
       models: z.record(z.string(), Model),
+      options: z.record(z.string(), z.any()).optional(),
     })
+    .refine(
+      (data) =>
+        (data.npm === "@ai-sdk/openai-compatible" && data.api !== undefined) ||
+        (data.npm !== "@ai-sdk/openai-compatible" && data.api === undefined),
+      {
+        message: "'api' field is required if and only if npm is '@ai-sdk/openai-compatible'",
+        path: ["api"],
+      },
+    )
     .meta({
       ref: "Provider",
     })

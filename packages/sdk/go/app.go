@@ -52,16 +52,22 @@ func (r *AppService) Providers(ctx context.Context, query AppProvidersParams, op
 
 type Model struct {
 	ID           string                 `json:"id,required"`
-	Attachment   bool                   `json:"attachment,required"`
-	Cost         ModelCost              `json:"cost,required"`
-	Limit        ModelLimit             `json:"limit,required"`
 	Name         string                 `json:"name,required"`
-	Options      map[string]interface{} `json:"options,required"`
+	Attachment   bool                   `json:"attachment,required"`
 	Reasoning    bool                   `json:"reasoning,required"`
-	ReleaseDate  string                 `json:"release_date,required"`
 	Temperature  bool                   `json:"temperature,required"`
 	ToolCall     bool                   `json:"tool_call,required"`
+	Knowledge    string                 `json:"knowledge"`
+	ReleaseDate  string                 `json:"release_date,required"`
+	LastUpdated  string                 `json:"last_updated,required"`
+	Modalities   ModelModalities        `json:"modalities,required"`
+	OpenWeights  bool                   `json:"open_weights,required"`
+	Cost         *ModelCost             `json:"cost"`
+	Limit        ModelLimit             `json:"limit,required"`
+	Options      map[string]interface{} `json:"options"`
 	Experimental bool                   `json:"experimental"`
+	Alpha        bool                   `json:"alpha"`
+	Beta         bool                   `json:"beta"`
 	Provider     ModelProvider          `json:"provider"`
 	JSON         modelJSON              `json:"-"`
 }
@@ -78,7 +84,13 @@ type modelJSON struct {
 	ReleaseDate  apijson.Field
 	Temperature  apijson.Field
 	ToolCall     apijson.Field
+	Knowledge    apijson.Field
+	LastUpdated  apijson.Field
+	Modalities   apijson.Field
+	OpenWeights  apijson.Field
 	Experimental apijson.Field
+	Alpha        apijson.Field
+	Beta         apijson.Field
 	Provider     apijson.Field
 	raw          string
 	ExtraFields  map[string]apijson.Field
@@ -93,11 +105,14 @@ func (r modelJSON) RawJSON() string {
 }
 
 type ModelCost struct {
-	Input      float64       `json:"input,required"`
-	Output     float64       `json:"output,required"`
-	CacheRead  float64       `json:"cache_read"`
-	CacheWrite float64       `json:"cache_write"`
-	JSON       modelCostJSON `json:"-"`
+	Input       float64       `json:"input,required"`
+	Output      float64       `json:"output,required"`
+	CacheRead   float64       `json:"cache_read"`
+	CacheWrite  float64       `json:"cache_write"`
+	Reasoning   float64       `json:"reasoning"`
+	InputAudio  float64       `json:"input_audio"`
+	OutputAudio float64       `json:"output_audio"`
+	JSON        modelCostJSON `json:"-"`
 }
 
 // modelCostJSON contains the JSON metadata for the struct [ModelCost]
@@ -106,6 +121,22 @@ type modelCostJSON struct {
 	Output      apijson.Field
 	CacheRead   apijson.Field
 	CacheWrite  apijson.Field
+	Reasoning   apijson.Field
+	InputAudio  apijson.Field
+	OutputAudio apijson.Field
+	raw         string
+	ExtraFields map[string]apijson.Field
+}
+
+type ModelModalities struct {
+	Input  []string            `json:"input,required"`
+	Output []string            `json:"output,required"`
+	JSON   modelModalitiesJSON `json:"-"`
+}
+
+type modelModalitiesJSON struct {
+	Input       apijson.Field
+	Output      apijson.Field
 	raw         string
 	ExtraFields map[string]apijson.Field
 }
@@ -141,13 +172,15 @@ func (r modelLimitJSON) RawJSON() string {
 }
 
 type ModelProvider struct {
-	Npm  string            `json:"npm,required"`
+	Npm  string            `json:"npm"`
+	API  string            `json:"api"`
 	JSON modelProviderJSON `json:"-"`
 }
 
 // modelProviderJSON contains the JSON metadata for the struct [ModelProvider]
 type modelProviderJSON struct {
 	Npm         apijson.Field
+	API         apijson.Field
 	raw         string
 	ExtraFields map[string]apijson.Field
 }
@@ -161,23 +194,27 @@ func (r modelProviderJSON) RawJSON() string {
 }
 
 type Provider struct {
-	ID     string           `json:"id,required"`
-	Env    []string         `json:"env,required"`
-	Models map[string]Model `json:"models,required"`
-	Name   string           `json:"name,required"`
-	API    string           `json:"api"`
-	Npm    string           `json:"npm"`
-	JSON   providerJSON     `json:"-"`
+	ID      string                 `json:"id,required"`
+	Name    string                 `json:"name,required"`
+	Env     []string               `json:"env,required"`
+	Npm     string                 `json:"npm,required"`
+	Doc     string                 `json:"doc,required"`
+	API     string                 `json:"api"`
+	Models  map[string]Model       `json:"models,required"`
+	Options map[string]interface{} `json:"options"`
+	JSON    providerJSON           `json:"-"`
 }
 
 // providerJSON contains the JSON metadata for the struct [Provider]
 type providerJSON struct {
 	ID          apijson.Field
+	Name        apijson.Field
 	Env         apijson.Field
 	Models      apijson.Field
-	Name        apijson.Field
 	API         apijson.Field
 	Npm         apijson.Field
+	Doc         apijson.Field
+	Options     apijson.Field
 	raw         string
 	ExtraFields map[string]apijson.Field
 }

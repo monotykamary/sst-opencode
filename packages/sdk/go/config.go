@@ -1567,36 +1567,48 @@ func (r configProviderJSON) RawJSON() string {
 }
 
 type ConfigProviderModel struct {
-	ID           string                       `json:"id"`
-	Attachment   bool                         `json:"attachment"`
-	Cost         ConfigProviderModelsCost     `json:"cost"`
-	Experimental bool                         `json:"experimental"`
-	Limit        ConfigProviderModelsLimit    `json:"limit"`
-	Name         string                       `json:"name"`
-	Options      map[string]interface{}       `json:"options"`
-	Provider     ConfigProviderModelsProvider `json:"provider"`
-	Reasoning    bool                         `json:"reasoning"`
-	ReleaseDate  string                       `json:"release_date"`
-	Temperature  bool                         `json:"temperature"`
-	ToolCall     bool                         `json:"tool_call"`
-	JSON         configProviderModelJSON      `json:"-"`
+	ID           string                         `json:"id"`
+	Name         string                         `json:"name"`
+	Attachment   bool                           `json:"attachment"`
+	Reasoning    bool                           `json:"reasoning"`
+	Temperature  bool                           `json:"temperature"`
+	ToolCall     bool                           `json:"tool_call"`
+	Knowledge    string                         `json:"knowledge"`
+	ReleaseDate  string                         `json:"release_date"`
+	LastUpdated  string                         `json:"last_updated"`
+	Modalities   ConfigProviderModelsModalities `json:"modalities"`
+	OpenWeights  bool                           `json:"open_weights"`
+	Cost         *ConfigProviderModelsCost      `json:"cost"`
+	Limit        ConfigProviderModelsLimit      `json:"limit"`
+	Options      map[string]interface{}         `json:"options"`
+	Experimental bool                           `json:"experimental"`
+	Alpha        bool                           `json:"alpha"`
+	Beta         bool                           `json:"beta"`
+	Provider     ConfigProviderModelsProvider   `json:"provider"`
+	JSON         configProviderModelJSON        `json:"-"`
 }
 
 // configProviderModelJSON contains the JSON metadata for the struct
 // [ConfigProviderModel]
 type configProviderModelJSON struct {
 	ID           apijson.Field
+	Name         apijson.Field
 	Attachment   apijson.Field
+	Reasoning    apijson.Field
+	Temperature  apijson.Field
+	ToolCall     apijson.Field
+	Knowledge    apijson.Field
+	ReleaseDate  apijson.Field
+	LastUpdated  apijson.Field
+	Modalities   apijson.Field
+	OpenWeights  apijson.Field
 	Cost         apijson.Field
 	Experimental apijson.Field
 	Limit        apijson.Field
-	Name         apijson.Field
 	Options      apijson.Field
 	Provider     apijson.Field
-	Reasoning    apijson.Field
-	ReleaseDate  apijson.Field
-	Temperature  apijson.Field
-	ToolCall     apijson.Field
+	Alpha        apijson.Field
+	Beta         apijson.Field
 	raw          string
 	ExtraFields  map[string]apijson.Field
 }
@@ -1610,11 +1622,14 @@ func (r configProviderModelJSON) RawJSON() string {
 }
 
 type ConfigProviderModelsCost struct {
-	Input      float64                      `json:"input,required"`
-	Output     float64                      `json:"output,required"`
-	CacheRead  float64                      `json:"cache_read"`
-	CacheWrite float64                      `json:"cache_write"`
-	JSON       configProviderModelsCostJSON `json:"-"`
+	Input       float64                      `json:"input"`
+	Output      float64                      `json:"output"`
+	CacheRead   float64                      `json:"cache_read"`
+	CacheWrite  float64                      `json:"cache_write"`
+	Reasoning   float64                      `json:"reasoning"`
+	InputAudio  float64                      `json:"input_audio"`
+	OutputAudio float64                      `json:"output_audio"`
+	JSON        configProviderModelsCostJSON `json:"-"`
 }
 
 // configProviderModelsCostJSON contains the JSON metadata for the struct
@@ -1624,6 +1639,9 @@ type configProviderModelsCostJSON struct {
 	Output      apijson.Field
 	CacheRead   apijson.Field
 	CacheWrite  apijson.Field
+	Reasoning   apijson.Field
+	InputAudio  apijson.Field
+	OutputAudio apijson.Field
 	raw         string
 	ExtraFields map[string]apijson.Field
 }
@@ -1656,6 +1674,27 @@ func (r *ConfigProviderModelsLimit) UnmarshalJSON(data []byte) (err error) {
 }
 
 func (r configProviderModelsLimitJSON) RawJSON() string {
+	return r.raw
+}
+
+type ConfigProviderModelsModalities struct {
+	Input  []string                           `json:"input"`
+	Output []string                           `json:"output"`
+	JSON   configProviderModelsModalitiesJSON `json:"-"`
+}
+
+type configProviderModelsModalitiesJSON struct {
+	Input       apijson.Field
+	Output      apijson.Field
+	raw         string
+	ExtraFields map[string]apijson.Field
+}
+
+func (r *ConfigProviderModelsModalities) UnmarshalJSON(data []byte) (err error) {
+	return apijson.UnmarshalRoot(data, r)
+}
+
+func (r configProviderModelsModalitiesJSON) RawJSON() string {
 	return r.raw
 }
 

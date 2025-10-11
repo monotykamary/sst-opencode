@@ -782,6 +782,55 @@ func (a *App) CreateSession(ctx context.Context) (*opencode.Session, error) {
 
 func (a *App) SendPrompt(ctx context.Context, prompt Prompt) (*App, tea.Cmd) {
 	var cmds []tea.Cmd
+	if a.Model != nil && a.Provider != nil {
+		limit := map[string]struct{}{}
+		for _, kind := range a.Model.Modalities.Input {
+			limit[kind] = struct{}{}
+		}
+		blocked := map[string]struct{}{}
+		for _, att := range prompt.Attachments {
+			if att.MediaType == "" {
+				continue
+			}
+			if att.Type != "file" {
+				continue
+			}
+			kind := ""
+			if strings.HasPrefix(att.MediaType, "image/") {
+				kind = "image"
+			}
+			if strings.HasPrefix(att.MediaType, "audio/") {
+				if kind == "" {
+					kind = "audio"
+				}
+			}
+			if strings.HasPrefix(att.MediaType, "video/") {
+				if kind == "" {
+					kind = "video"
+				}
+			}
+			if att.MediaType == "application/pdf" {
+				if kind == "" {
+					kind = "pdf"
+				}
+			}
+			if kind == "" {
+				continue
+			}
+			if _, ok := limit[kind]; ok {
+				continue
+			}
+			blocked[kind] = struct{}{}
+		}
+		if len(blocked) > 0 {
+			var kinds []string
+			for k := range blocked {
+				kinds = append(kinds, k)
+			}
+			msg := fmt.Sprintf("%s/%s skips %s attachments; switch to a compatible model to use them.", a.Provider.ID, a.Model.ID, strings.Join(kinds, ", "))
+			cmds = append(cmds, toast.NewWarningToast(msg))
+		}
+	}
 	if a.Session.ID == "" {
 		session, err := a.CreateSession(ctx)
 		if err != nil {
