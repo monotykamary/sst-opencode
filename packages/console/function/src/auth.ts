@@ -14,9 +14,10 @@ import { User } from "@opencode-ai/console-core/user.js"
 import { and, Database, eq, isNull } from "@opencode-ai/console-core/drizzle/index.js"
 import { WorkspaceTable } from "@opencode-ai/console-core/schema/workspace.sql.js"
 import { UserTable } from "@opencode-ai/console-core/schema/user.sql.js"
+import type { KVNamespace as CloudflareKVNamespace } from "@cloudflare/workers-types"
 
 type Env = {
-  AuthStorage: KVNamespace
+  AuthStorage: CloudflareKVNamespace
 }
 
 export const subjects = createSubjects({
