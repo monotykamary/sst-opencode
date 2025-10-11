@@ -45,7 +45,8 @@ export namespace Provider {
 
       if (!hasKey) {
         for (const [key, value] of Object.entries(input.models)) {
-          if (value.cost.input === 0) continue
+          const inputCost = value.cost?.input ?? Infinity
+          if (inputCost === 0) continue
           delete input.models[key]
         }
       }
@@ -256,6 +257,20 @@ export namespace Provider {
             input: ["text"],
             output: ["text"],
           }
+
+        const mergedCost =
+          model.cost || existingModel?.cost
+            ? {
+                input: model.cost?.input ?? existingModel?.cost?.input ?? 0,
+                output: model.cost?.output ?? existingModel?.cost?.output ?? 0,
+                reasoning: model.cost?.reasoning ?? existingModel?.cost?.reasoning,
+                cache_read: model.cost?.cache_read ?? existingModel?.cost?.cache_read,
+                cache_write: model.cost?.cache_write ?? existingModel?.cost?.cache_write,
+                input_audio: model.cost?.input_audio ?? existingModel?.cost?.input_audio,
+                output_audio: model.cost?.output_audio ?? existingModel?.cost?.output_audio,
+              }
+            : undefined
+
         const parsedModel: ModelsDev.Model = {
           id: modelID,
           name: model.name ?? existingModel?.name ?? modelID,
@@ -273,16 +288,7 @@ export namespace Provider {
             "1970-01",
           modalities: baseModalities,
           open_weights: model.open_weights ?? existingModel?.open_weights ?? false,
-          cost:
-            !model.cost && !existingModel?.cost
-              ? {
-                  input: 0,
-                  output: 0,
-                }
-              : {
-                  ...existingModel?.cost,
-                  ...model.cost,
-                },
+          cost: mergedCost,
           limit:
             model.limit ??
             existingModel?.limit ?? {

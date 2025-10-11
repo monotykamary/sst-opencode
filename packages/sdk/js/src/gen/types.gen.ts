@@ -406,10 +406,6 @@ export type Config = {
           temperature?: boolean
           tool_call?: boolean
           open_weights?: boolean
-          modalities?: {
-            input: Array<"text" | "audio" | "image" | "video" | "pdf">
-            output: Array<"text" | "audio" | "image" | "video" | "pdf">
-          }
           cost?: {
             input?: number
             output?: number
@@ -920,8 +916,8 @@ export type Model = {
     output: Array<"text" | "audio" | "image" | "video" | "pdf">
   }
   cost?: {
-    input?: number
-    output?: number
+    input: number
+    output: number
     cache_read?: number
     cache_write?: number
     reasoning?: number
@@ -931,10 +927,6 @@ export type Model = {
   limit: {
     context: number
     output: number
-  }
-  modalities?: {
-    input: Array<"text" | "audio" | "image" | "video" | "pdf">
-    output: Array<"text" | "audio" | "image" | "video" | "pdf">
   }
   experimental?: boolean
   alpha?: boolean
