@@ -237,11 +237,16 @@ export default function Page() {
                 </div>
                 <Tooltip forceMount={false} value={`$${i.cost?.input}/1M input, $${i.cost?.output}/1M output`}>
                   <div class="rounded-full bg-success/20 text-success/80 w-9 h-4 flex items-center justify-center text-[10px]">
-                    <Switch fallback="FREE">
-                      <Match when={i.cost?.input > 10}>$$$</Match>
-                      <Match when={i.cost?.input > 1}>$$</Match>
-                      <Match when={i.cost?.input > 0.1}>$</Match>
-                    </Switch>
+                    {(() => {
+                      const inputCost = i.cost?.input ?? 0
+                      return (
+                        <Switch fallback="FREE">
+                          <Match when={inputCost > 10}>$$$</Match>
+                          <Match when={inputCost > 1}>$$</Match>
+                          <Match when={inputCost > 0.1}>$</Match>
+                        </Switch>
+                      )
+                    })()}
                   </div>
                 </Tooltip>
               </div>
