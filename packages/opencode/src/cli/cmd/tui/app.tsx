@@ -35,6 +35,7 @@ import { ArgsProvider, useArgs, type Args } from "./context/args"
 import open from "open"
 import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
+import { buildOsc9Notification } from "../../util/osc"
 
 async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
   // can't set raw mode if not a TTY
@@ -178,6 +179,61 @@ function App() {
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
+  const notifiedMessages = new Set<string>()
+  const messageTextParts = new Map<string, Map<string, string>>()
+
+  const recordTextPart = (part: {
+    messageID: string
+    id: string
+    text: string
+    synthetic?: boolean
+    ignored?: boolean
+  }) => {
+    if (part.synthetic || part.ignored || !part.text) return
+    let perMessage = messageTextParts.get(part.messageID)
+    if (!perMessage) {
+      perMessage = new Map()
+      messageTextParts.set(part.messageID, perMessage)
+    }
+    perMessage.set(part.id, part.text)
+  }
+
+  const buildPreview = (messageID: string) => {
+    const parts = sync.data.part[messageID]
+    const textParts: string[] = []
+    if (parts) {
+      for (const part of parts) {
+        if (part.type !== "text" || part.synthetic || part.ignored) continue
+        textParts.push(part.text)
+      }
+    }
+    if (textParts.length === 0) {
+      const cached = messageTextParts.get(messageID)
+      if (cached) textParts.push(...cached.values())
+    }
+    return textParts.join("\n")
+  }
+
+  const notifyOsc9 = (messageID: string) => {
+    if (!process.stdout.isTTY) return
+    const preview = buildPreview(messageID)
+    const payload = buildOsc9Notification(preview, { fallback: "OpenCode response complete" })
+    if (!payload) return
+    // @ts-expect-error writeOut is not in type definitions
+    renderer.writeOut(payload)
+    messageTextParts.delete(messageID)
+  }
+
+  const shouldNotifyAssistant = (info: {
+    role: string
+    time?: { completed?: number }
+    finish?: string
+  }) => {
+    if (info.role !== "assistant") return false
+    if (!info.time?.completed) return false
+    if (!info.finish) return true
+    return !["tool-calls", "unknown"].includes(info.finish)
+  }
 
   // Wire up console copy-to-clipboard via opentui's onCopySelection callback
   renderer.console.onCopySelection = async (text: string) => {
@@ -534,6 +590,21 @@ function App() {
         ).then(() => kv.set("openrouter_warning", true))
       })
     }
+  })
+
+  sdk.event.on("message.part.updated", (evt) => {
+    const part = evt.properties.part
+    if (part.type === "text") recordTextPart(part)
+  })
+
+  sdk.event.on("message.updated", (evt) => {
+    const info = evt.properties.info
+    if (info.role !== "assistant" || !info.time?.completed) return
+    if (shouldNotifyAssistant(info) && !notifiedMessages.has(info.id)) {
+      notifiedMessages.add(info.id)
+      notifyOsc9(info.id)
+    }
+    messageTextParts.delete(info.id)
   })
 
   sdk.event.on(TuiEvent.CommandExecute.type, (evt) => {

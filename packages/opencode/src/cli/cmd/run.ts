@@ -1,6 +1,7 @@
 import type { Argv } from "yargs"
 import path from "path"
 import { UI } from "../ui"
+import { buildOsc9Notification } from "../util/osc"
 import { cmd } from "./cmd"
 import { Flag } from "../../flag/flag"
 import { bootstrap } from "../bootstrap"
@@ -147,6 +148,46 @@ export const RunCommand = cmd({
         return false
       }
 
+      const notifiedMessages = new Set<string>()
+      const messageTextParts = new Map<string, Map<string, string>>()
+
+      const recordTextPart = (part: { messageID: string; id: string; text: string; synthetic?: boolean; ignored?: boolean }) => {
+        if (part.synthetic || part.ignored || !part.text) return
+        let perMessage = messageTextParts.get(part.messageID)
+        if (!perMessage) {
+          perMessage = new Map()
+          messageTextParts.set(part.messageID, perMessage)
+        }
+        perMessage.set(part.id, part.text)
+      }
+
+      const buildPreview = (messageID: string) => {
+        const parts = messageTextParts.get(messageID)
+        if (!parts) return ""
+        return Array.from(parts.values()).join("\n")
+      }
+
+      const canNotify = () => process.stdout.isTTY && args.format !== "json"
+
+      const notifyOsc9 = (messageID: string) => {
+        if (!canNotify()) return
+        const preview = buildPreview(messageID)
+        const payload = buildOsc9Notification(preview, { fallback: "OpenCode response complete" })
+        if (!payload) return
+        process.stdout.write(payload)
+      }
+
+      const shouldNotifyAssistant = (info: {
+        role: string
+        time?: { completed?: number }
+        finish?: string
+      }) => {
+        if (info.role !== "assistant") return false
+        if (!info.time?.completed) return false
+        if (!info.finish) return true
+        return !["tool-calls", "unknown"].includes(info.finish)
+      }
+
       const events = await sdk.event.subscribe()
       let errorMsg: string | undefined
 
@@ -155,6 +196,10 @@ export const RunCommand = cmd({
           if (event.type === "message.part.updated") {
             const part = event.properties.part
             if (part.sessionID !== sessionID) continue
+
+            if (part.type === "text") {
+              recordTextPart(part)
+            }
 
             if (part.type === "tool" && part.state.status === "completed") {
               if (outputJsonEvent("tool_use", { part })) continue
@@ -184,6 +229,17 @@ export const RunCommand = cmd({
               process.stdout.write((isPiped ? part.text : UI.markdown(part.text)) + EOL)
               if (!isPiped) UI.println()
             }
+          }
+
+          if (event.type === "message.updated") {
+            const info = event.properties.info
+            if (info.sessionID !== sessionID) continue
+            if (info.role !== "assistant" || !info.time?.completed) continue
+            if (shouldNotifyAssistant(info) && !notifiedMessages.has(info.id)) {
+              notifiedMessages.add(info.id)
+              notifyOsc9(info.id)
+            }
+            messageTextParts.delete(info.id)
           }
 
           if (event.type === "session.error") {
