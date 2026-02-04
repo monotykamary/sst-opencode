@@ -333,12 +333,14 @@ export namespace ProviderTransform {
       id.includes("deepseek") ||
       id.includes("minimax") ||
       id.includes("glm") ||
-      id.includes("mistral") ||
-      id.includes("kimi") ||
-      // TODO: Remove this after models.dev data is fixed to use "kimi-k2.5" instead of "k2p5"
-      id.includes("k2p5")
+      id.includes("mistral")
     )
       return {}
+
+    // kimi-for-coding uses @ai-sdk/anthropic which supports thinking
+    // other kimi providers don't have real variant support
+    // TODO: Remove k2p5 check after models.dev data is fixed to use "kimi-k2.5"
+    if ((id.includes("kimi") || id.includes("k2p5")) && model.api.npm !== "@ai-sdk/anthropic") return {}
 
     // see: https://docs.x.ai/docs/guides/reasoning#control-how-hard-the-model-thinks
     if (id.includes("grok") && id.includes("grok-3-mini")) {
