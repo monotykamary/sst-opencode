@@ -339,8 +339,7 @@ export namespace ProviderTransform {
 
     // kimi-for-coding uses @ai-sdk/anthropic which supports thinking
     // other kimi providers don't have real variant support
-    // TODO: Remove k2p5 check after models.dev data is fixed to use "kimi-k2.5"
-    if ((id.includes("kimi") || id.includes("k2p5")) && model.api.npm !== "@ai-sdk/anthropic") return {}
+    if (id.includes("kimi") && model.api.npm !== "@ai-sdk/anthropic") return {}
 
     // see: https://docs.x.ai/docs/guides/reasoning#control-how-hard-the-model-thinks
     if (id.includes("grok") && id.includes("grok-3-mini")) {
@@ -629,6 +628,18 @@ export namespace ProviderTransform {
       }
       if (input.model.api.id.includes("gemini-3")) {
         result["thinkingConfig"]["thinkingLevel"] = "high"
+      }
+    }
+
+    // Enable thinking by default for kimi-k2.5/k2p5 models using anthropic SDK
+    const modelId = input.model.api.id.toLowerCase()
+    if (
+      (input.model.api.npm === "@ai-sdk/anthropic" || input.model.api.npm === "@ai-sdk/google-vertex/anthropic") &&
+      (modelId.includes("k2p5") || modelId.includes("kimi-k2.5") || modelId.includes("kimi-k2p5"))
+    ) {
+      result["thinking"] = {
+        type: "enabled",
+        budgetTokens: Math.min(16_000, Math.floor(input.model.limit.output / 2 - 1)),
       }
     }
 
