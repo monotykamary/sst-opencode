@@ -390,6 +390,7 @@ export namespace SessionPrompt {
               prompt: task.prompt,
               description: task.description,
               subagent_type: task.agent,
+              systemPrompt: task.systemPrompt,
               command: task.command,
             },
             time: {
@@ -401,6 +402,7 @@ export namespace SessionPrompt {
           prompt: task.prompt,
           description: task.description,
           subagent_type: task.agent,
+          systemPrompt: task.systemPrompt,
           command: task.command,
         }
         await Plugin.trigger(

@@ -21,6 +21,7 @@ const parameters = z.object({
       "This should only be set if you mean to resume a previous task (you can pass a prior task_id and the task will continue the same subagent session as before instead of creating a fresh one)",
     )
     .optional(),
+  systemPrompt: z.string().describe("Override the subagent system prompt for this task").optional(),
   command: z.string().describe("The command that triggered this task").optional(),
 })
 
@@ -133,6 +134,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           providerID: model.providerID,
         },
         agent: agent.name,
+        system: params.systemPrompt,
         tools: {
           todowrite: false,
           todoread: false,

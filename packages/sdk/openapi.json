@@ -6648,6 +6648,9 @@
           "agent": {
             "type": "string"
           },
+          "systemPrompt": {
+            "type": "string"
+          },
           "model": {
             "type": "object",
             "properties": {
@@ -10638,6 +10641,9 @@
             "type": "string"
           },
           "agent": {
+            "type": "string"
+          },
+          "systemPrompt": {
             "type": "string"
           },
           "model": {

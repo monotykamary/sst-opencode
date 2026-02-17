@@ -206,6 +206,7 @@ export namespace MessageV2 {
     prompt: z.string(),
     description: z.string(),
     agent: z.string(),
+    systemPrompt: z.string().optional(),
     model: z
       .object({
         providerID: z.string(),
